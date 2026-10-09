@@ -1,0 +1,361 @@
+{
+ "platform": {
+  "per_window": {
+   "WD": {
+    "status": "数据不全",
+    "kappa": [
+     "SL050",
+     "SL060",
+     "SL070",
+     "SL080"
+    ]
+   },
+   "WX": {
+    "status": "数据不全",
+    "kappa": [
+     "SL050",
+     "SL060",
+     "SL070",
+     "SL080"
+    ]
+   },
+   "WC": {
+    "status": "数据不全",
+    "kappa": [
+     "SL050",
+     "SL060",
+     "SL070",
+     "SL080"
+    ]
+   }
+  },
+  "platform_sharpe": false,
+  "platform_calmar": false,
+  "spike_windows": [],
+  "notes": [
+   "平台未成立：需主判窗上 Δ★Sharpe 与 Δ★Calmar 均形成 ≥2 相邻正段"
+  ],
+  "platform_all": false,
+  "n_platform_windows": 0,
+  "n_complete_windows": 0,
+  "platform_ge2_of_3": false
+ },
+ "adopt": {
+  "P0": {
+   "windows_available": [
+    "WD"
+   ],
+   "n_tail_pass": 0,
+   "n_tail_total": 3,
+   "complete": false,
+   "mean_d_sharpe": 0.0,
+   "mean_d_calmar_abs": 0.0,
+   "adopt": false,
+   "status": "判据未闭合（数据不全）"
+  },
+  "SL050": {
+   "windows_available": [],
+   "n_tail_pass": 0,
+   "n_tail_total": 3,
+   "complete": false,
+   "mean_d_sharpe": null,
+   "mean_d_calmar_abs": null,
+   "adopt": false,
+   "status": "判据未闭合（数据不全）"
+  },
+  "SL060": {
+   "windows_available": [
+    "WD"
+   ],
+   "n_tail_pass": 1,
+   "n_tail_total": 3,
+   "complete": false,
+   "mean_d_sharpe": 0.23648108964597714,
+   "mean_d_calmar_abs": 0.23815547420338923,
+   "adopt": false,
+   "status": "判据未闭合（数据不全）"
+  },
+  "SL070": {
+   "windows_available": [
+    "WD"
+   ],
+   "n_tail_pass": 0,
+   "n_tail_total": 3,
+   "complete": false,
+   "mean_d_sharpe": -0.2298858698887003,
+   "mean_d_calmar_abs": -0.11445823706257952,
+   "adopt": false,
+   "status": "判据未闭合（数据不全）"
+  },
+  "SL080": {
+   "windows_available": [
+    "WD"
+   ],
+   "n_tail_pass": 1,
+   "n_tail_total": 3,
+   "complete": false,
+   "mean_d_sharpe": 0.2592135850999533,
+   "mean_d_calmar_abs": 0.23363194415138167,
+   "adopt": false,
+   "status": "判据未闭合（数据不全）"
+  },
+  "SL060PT125": {
+   "windows_available": [],
+   "n_tail_pass": 0,
+   "n_tail_total": 3,
+   "complete": false,
+   "mean_d_sharpe": null,
+   "mean_d_calmar_abs": null,
+   "adopt": false,
+   "status": "判据未闭合（数据不全）"
+  }
+ },
+ "deltas": {
+  "P0": {
+   "WD": {
+    "window": "WD",
+    "available": true,
+    "base_calmar": -0.6600184025645384,
+    "d_sharpe": 0.0,
+    "d_calmar_abs": 0.0,
+    "rel_calmar_valid": false,
+    "d_calmar_rel": null,
+    "mdd_improve_pp": 0.0,
+    "mdd_abs_arm": 0.2431880985892734,
+    "mdd_abs_base": 0.2431880985892734,
+    "avg_exposure_base": 0.6512868639940543,
+    "avg_exposure_arm": 0.6512868639940543,
+    "d_avg_exposure": 0.0,
+    "unit_expo_annual_base": -0.24644842269544837,
+    "unit_expo_annual_arm": -0.24644842269544837,
+    "d_unit_expo_annual": 0.0,
+    "unit_expo_mdd_base": 0.3733962897668599,
+    "unit_expo_mdd_arm": 0.3733962897668599,
+    "d_unit_expo_mdd": 0.0,
+    "valley_date": "2024-02-07",
+    "valley_clear_base": 0.06167204706388069,
+    "valley_clear_arm": 0.06167204706388069,
+    "valley_rebound_base": 0.11056735165519105,
+    "valley_rebound_arm": 0.11056735165519105,
+    "d_valley_rebound_pp": 0.0,
+    "sl_ratio_base": 0.5012531328320802,
+    "sl_ratio_arm": 0.5012531328320802,
+    "d_sl_ratio_pp": 0.0,
+    "pt_ratio_base": 0.2531328320802005,
+    "pt_ratio_arm": 0.2531328320802005,
+    "sell_total_base": 399,
+    "sell_total_arm": 399,
+    "g_sharpe": false,
+    "g_calmar": false,
+    "g_both": false,
+    "non_mechanism": false,
+    "pure_derisk": false,
+    "dose_component": false
+   },
+   "WX": {
+    "window": "WX",
+    "available": false
+   },
+   "WC": {
+    "window": "WC",
+    "available": false
+   }
+  },
+  "SL050": {
+   "WD": {
+    "window": "WD",
+    "available": false
+   },
+   "WX": {
+    "window": "WX",
+    "available": false
+   },
+   "WC": {
+    "window": "WC",
+    "available": false
+   }
+  },
+  "SL060": {
+   "WD": {
+    "window": "WD",
+    "available": true,
+    "base_calmar": -0.6600184025645384,
+    "d_sharpe": 0.23648108964597714,
+    "d_calmar_abs": 0.23815547420338923,
+    "rel_calmar_valid": false,
+    "d_calmar_rel": null,
+    "mdd_improve_pp": 7.594976389406841,
+    "mdd_abs_arm": 0.167238334695205,
+    "mdd_abs_base": 0.2431880985892734,
+    "avg_exposure_base": 0.6512868639940543,
+    "avg_exposure_arm": 0.393264299317691,
+    "d_avg_exposure": -0.2580225646763633,
+    "unit_expo_annual_base": -0.24644842269544837,
+    "unit_expo_annual_arm": -0.1794000974183709,
+    "d_unit_expo_annual": 0.06704832527707746,
+    "unit_expo_mdd_base": 0.3733962897668599,
+    "unit_expo_mdd_arm": 0.42525684376985545,
+    "d_unit_expo_mdd": 0.05186055400299555,
+    "valley_date": "2024-02-07",
+    "valley_clear_base": 0.06167204706388069,
+    "valley_clear_arm": 0.04859352983452017,
+    "valley_rebound_base": 0.11056735165519105,
+    "valley_rebound_arm": 0.0787827199701927,
+    "d_valley_rebound_pp": -3.1784631684998343,
+    "sl_ratio_base": 0.5012531328320802,
+    "sl_ratio_arm": 0.6365461847389559,
+    "d_sl_ratio_pp": 13.529305190687568,
+    "pt_ratio_base": 0.2531328320802005,
+    "pt_ratio_arm": 0.1706827309236948,
+    "sell_total_base": 399,
+    "sell_total_arm": 498,
+    "g_sharpe": true,
+    "g_calmar": true,
+    "g_both": true,
+    "non_mechanism": false,
+    "pure_derisk": false,
+    "dose_component": true
+   },
+   "WX": {
+    "window": "WX",
+    "available": false
+   },
+   "WC": {
+    "window": "WC",
+    "available": false
+   }
+  },
+  "SL070": {
+   "WD": {
+    "window": "WD",
+    "available": true,
+    "base_calmar": -0.6600184025645384,
+    "d_sharpe": -0.2298858698887003,
+    "d_calmar_abs": -0.11445823706257952,
+    "rel_calmar_valid": false,
+    "d_calmar_rel": null,
+    "mdd_improve_pp": 3.0792773170072203,
+    "mdd_abs_arm": 0.2123953254192012,
+    "mdd_abs_base": 0.2431880985892734,
+    "avg_exposure_base": 0.6512868639940543,
+    "avg_exposure_arm": 0.46925078245633606,
+    "d_avg_exposure": -0.18203608153771828,
+    "unit_expo_annual_base": -0.24644842269544837,
+    "unit_expo_annual_arm": -0.3505486278405459,
+    "d_unit_expo_annual": -0.10410020514509755,
+    "unit_expo_mdd_base": 0.3733962897668599,
+    "unit_expo_mdd_arm": 0.4526264704501897,
+    "d_unit_expo_mdd": 0.07923018068332982,
+    "valley_date": "2024-02-07",
+    "valley_clear_base": 0.06167204706388069,
+    "valley_clear_arm": 0.03995913124226054,
+    "valley_rebound_base": 0.11056735165519105,
+    "valley_rebound_arm": 0.07345705376848288,
+    "d_valley_rebound_pp": -3.7110297886708166,
+    "sl_ratio_base": 0.5012531328320802,
+    "sl_ratio_arm": 0.6624203821656051,
+    "d_sl_ratio_pp": 16.11672493335249,
+    "pt_ratio_base": 0.2531328320802005,
+    "pt_ratio_arm": 0.14012738853503184,
+    "sell_total_base": 399,
+    "sell_total_arm": 471,
+    "g_sharpe": false,
+    "g_calmar": false,
+    "g_both": false,
+    "non_mechanism": false,
+    "pure_derisk": true,
+    "dose_component": true
+   },
+   "WX": {
+    "window": "WX",
+    "available": false
+   },
+   "WC": {
+    "window": "WC",
+    "available": false
+   }
+  },
+  "SL080": {
+   "WD": {
+    "window": "WD",
+    "available": true,
+    "base_calmar": -0.6600184025645384,
+    "d_sharpe": 0.2592135850999533,
+    "d_calmar_abs": 0.23363194415138167,
+    "rel_calmar_valid": false,
+    "d_calmar_rel": null,
+    "mdd_improve_pp": 2.2683574890215166,
+    "mdd_abs_arm": 0.22050452369905824,
+    "mdd_abs_base": 0.2431880985892734,
+    "avg_exposure_base": 0.6512868639940543,
+    "avg_exposure_arm": 0.5072528335150188,
+    "d_avg_exposure": -0.1440340304790355,
+    "unit_expo_annual_base": -0.24644842269544837,
+    "unit_expo_annual_arm": -0.18535163672247412,
+    "d_unit_expo_annual": 0.061096785972974244,
+    "unit_expo_mdd_base": 0.3733962897668599,
+    "unit_expo_mdd_arm": 0.43470338484078574,
+    "d_unit_expo_mdd": 0.061307095073925844,
+    "valley_date": "2024-02-07",
+    "valley_clear_base": 0.06167204706388069,
+    "valley_clear_arm": 0.06276317347627534,
+    "valley_rebound_base": 0.11056735165519105,
+    "valley_rebound_arm": 0.12164481380946035,
+    "d_valley_rebound_pp": 1.1077462154269302,
+    "sl_ratio_base": 0.5012531328320802,
+    "sl_ratio_arm": 0.5805785123966942,
+    "d_sl_ratio_pp": 7.932537956461405,
+    "pt_ratio_base": 0.2531328320802005,
+    "pt_ratio_arm": 0.21694214876033058,
+    "sell_total_base": 399,
+    "sell_total_arm": 484,
+    "g_sharpe": true,
+    "g_calmar": true,
+    "g_both": true,
+    "non_mechanism": false,
+    "pure_derisk": false,
+    "dose_component": true
+   },
+   "WX": {
+    "window": "WX",
+    "available": false
+   },
+   "WC": {
+    "window": "WC",
+    "available": false
+   }
+  },
+  "SL060PT125": {
+   "WD": {
+    "window": "WD",
+    "available": false
+   },
+   "WX": {
+    "window": "WX",
+    "available": false
+   },
+   "WC": {
+    "window": "WC",
+    "available": false
+   }
+  }
+ },
+ "missing": [
+  "P0-WX 目录不存在：results\\SmallAlpha191Test3_Q2_P0_WX_o3_20260913",
+  "P0-WC 目录不存在：results\\SmallAlpha191Test3_Q2_P0_WC_o3_20260913",
+  "SL050-WD 目录不存在：results\\SmallAlpha191Test3_Q2_SL050_WD_o3_20260913",
+  "SL050-WX 目录不存在：results\\SmallAlpha191Test3_Q2_SL050_WX_o3_20260913",
+  "SL050-WC 目录不存在：results\\SmallAlpha191Test3_Q2_SL050_WC_o3_20260913",
+  "SL060-WX 缺 report.json：results\\SmallAlpha191Test3_Q2_SL060_WX_o3_20260913",
+  "SL060-WC 目录不存在：results\\SmallAlpha191Test3_Q2_SL060_WC_o3_20260913",
+  "SL070-WX 目录不存在：results\\SmallAlpha191Test3_Q2_SL070_WX_o3_20260913",
+  "SL070-WC 目录不存在：results\\SmallAlpha191Test3_Q2_SL070_WC_o3_20260913",
+  "SL080-WX 目录不存在：results\\SmallAlpha191Test3_Q2_SL080_WX_o3_20260913",
+  "SL080-WC 目录不存在：results\\SmallAlpha191Test3_Q2_SL080_WC_o3_20260913",
+  "SL060PT125-WD 缺 report.json：results\\SmallAlpha191Test3_Q2_SL060PT125_WD_o3_20260913",
+  "SL060PT125-WX 目录不存在：results\\SmallAlpha191Test3_Q2_SL060PT125_WX_o3_20260913",
+  "SL060PT125-WC 目录不存在：results\\SmallAlpha191Test3_Q2_SL060PT125_WC_o3_20260913"
+ ],
+ "n_ready": 4,
+ "n_total": 18
+}

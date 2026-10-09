@@ -1,0 +1,13 @@
+﻿=== 6 个进程的命令行 ===
+pid=10764  name=python.exe
+    E:\quant\gpsef_project\.venv\Scripts\python.exe -u run_backtest.py --config _work/20261008_barra/configs/config_B1_full.yaml --output results/Q5BAR_B1_full_20261008
+pid=36388  name=python.exe
+    E:\quant\gpsef_project\.venv\Scripts\python.exe -u run_backtest.py --config _work/20261008_barra/configs/config_B1_full.yaml --output results/Q5BAR_B1_full_20261008
+pid=29972  name=tee.exe
+    D:\workbuddy\resources\vendor\PortableGit\usr\bin\tee.exe _work/20261008_barra/logs/full_B1.log
+pid=7192  name=python.exe
+    E:\quant\gpsef_project\.venv\Scripts\python.exe -u run_backtest.py --config _work/20261008_barra/configs/config_S1_full.yaml --output results/Q5BAR_S1_full_20261008
+pid=16448  name=tee.exe
+    D:\workbuddy\resources\vendor\PortableGit\usr\bin\tee.exe _work/20261008_barra/logs/full_S1.log
+pid=25144  name=python.exe
+    E:\quant\gpsef_project\.venv\Scripts\python.exe -u run_backtest.py --config _work/20261008_barra/configs/config_S1_full.yaml --output results/Q5BAR_S1_full_20261008

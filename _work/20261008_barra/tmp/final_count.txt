@@ -1,0 +1,6 @@
+﻿python 总数 = 4   tee 总数 = 2
+B1 臂 python = 2   S1 臂 python = 2
+  B1 pid=10764
+  B1 pid=36388
+  S1 pid=28488
+  S1 pid=34156

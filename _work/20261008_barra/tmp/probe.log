@@ -1,0 +1,282 @@
+INFO:__main__:运行模式: backtest
+INFO:gpsef.backtest.engine:回测输出目录: results/_Q5BAR_probe
+INFO:gpsef.backtest.engine:复权基准日: 2024-04-20 [来源: auto=回测结束日]
+INFO:gpsef.backtest.engine:回测区间: 2024-04-01 至 2024-04-20
+INFO:gpsef.backtest.engine:交易日数量: 13
+INFO:gpsef.backtest.engine:正在初始化股票池...
+INFO:gpsef.pool.dynamic_pool:正在初始化 DynamicStockPool（高性能版）...
+INFO:gpsef.pool.dynamic_pool:全市场股票数量: 5440
+INFO:gpsef.pool.dynamic_pool:数据加载范围: 2022-08-10 至 2024-04-20
+WARNING:gpsef.data.local_provider:sh.600930 基准日 2024-04-20 早于数据起始日 2025-07-16，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.601026 基准日 2024-04-20 早于数据起始日 2025-10-17，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.601112 基准日 2024-04-20 早于数据起始日 2026-01-29，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603014 基准日 2024-04-20 早于数据起始日 2025-05-19，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603049 基准日 2024-04-20 早于数据起始日 2025-06-05，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603072 基准日 2024-04-20 早于数据起始日 2025-01-03，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603091 基准日 2024-04-20 早于数据起始日 2024-09-20，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603092 基准日 2024-04-20 早于数据起始日 2025-11-07，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603120 基准日 2024-04-20 早于数据起始日 2025-04-16，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603124 基准日 2024-04-20 早于数据起始日 2025-03-20，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603175 基准日 2024-04-20 早于数据起始日 2025-10-24，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603194 基准日 2024-04-20 早于数据起始日 2024-12-24，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603202 基准日 2024-04-20 早于数据起始日 2025-04-24，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603205 基准日 2024-04-20 早于数据起始日 2024-11-07，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603207 基准日 2024-04-20 早于数据起始日 2024-08-26，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603210 基准日 2024-04-20 早于数据起始日 2025-04-09，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603248 基准日 2024-04-20 早于数据起始日 2025-12-23，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603257 基准日 2024-04-20 早于数据起始日 2025-04-08，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603262 基准日 2024-04-20 早于数据起始日 2025-07-23，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603271 基准日 2024-04-20 早于数据起始日 2025-03-11，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603284 基准日 2024-04-20 早于数据起始日 2026-02-10，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603285 基准日 2024-04-20 早于数据起始日 2024-07-05，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603293 基准日 2024-04-20 早于数据起始日 2026-04-16，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603310 基准日 2024-04-20 早于数据起始日 2024-08-14，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603334 基准日 2024-04-20 早于数据起始日 2025-11-05，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603350 基准日 2024-04-20 早于数据起始日 2024-07-03，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603352 基准日 2024-04-20 早于数据起始日 2026-01-15，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603370 基准日 2024-04-20 早于数据起始日 2025-09-05，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603376 基准日 2024-04-20 早于数据起始日 2025-11-06，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603381 基准日 2024-04-20 早于数据起始日 2024-06-26，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603382 基准日 2024-04-20 早于数据起始日 2025-06-12，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603391 基准日 2024-04-20 早于数据起始日 2024-07-31，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603395 基准日 2024-04-20 早于数据起始日 2024-11-26，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603400 基准日 2024-04-20 早于数据起始日 2025-06-20，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603402 基准日 2024-04-20 早于数据起始日 2026-01-06，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603406 基准日 2024-04-20 早于数据起始日 2025-08-08，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603407 基准日 2024-04-20 早于数据起始日 2026-05-11，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603409 基准日 2024-04-20 早于数据起始日 2025-03-04，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603418 基准日 2024-04-20 早于数据起始日 2025-09-23，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603435 基准日 2024-04-20 早于数据起始日 2026-05-22，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.603459 基准日 2024-04-20 早于数据起始日 2026-04-08，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688411 基准日 2024-04-20 早于数据起始日 2025-01-27，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688449 基准日 2024-04-20 早于数据起始日 2024-11-29，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688530 基准日 2024-04-20 早于数据起始日 2024-05-09，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688545 基准日 2024-04-20 早于数据起始日 2025-01-22，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688583 基准日 2024-04-20 早于数据起始日 2025-01-15，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688605 基准日 2024-04-20 早于数据起始日 2024-12-12，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688615 基准日 2024-04-20 早于数据起始日 2024-09-26，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688635 基准日 2024-04-20 早于数据起始日 2026-05-27，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688692 基准日 2024-04-20 早于数据起始日 2024-06-12，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688708 基准日 2024-04-20 早于数据起始日 2024-12-05，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688710 基准日 2024-04-20 早于数据起始日 2024-09-03，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688712 基准日 2024-04-20 早于数据起始日 2026-02-05，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688721 基准日 2024-04-20 早于数据起始日 2024-08-06，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688726 基准日 2024-04-20 早于数据起始日 2024-10-29，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688727 基准日 2024-04-20 早于数据起始日 2025-11-18，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688729 基准日 2024-04-20 早于数据起始日 2025-07-08，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688750 基准日 2024-04-20 早于数据起始日 2024-11-20，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688755 基准日 2024-04-20 早于数据起始日 2025-05-16，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688757 基准日 2024-04-20 早于数据起始日 2025-03-25，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688758 基准日 2024-04-20 早于数据起始日 2025-01-10，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688759 基准日 2024-04-20 早于数据起始日 2025-10-28，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688765 基准日 2024-04-20 早于数据起始日 2025-10-28，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688775 基准日 2024-04-20 早于数据起始日 2025-06-11，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688781 基准日 2024-04-20 早于数据起始日 2026-03-25，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688783 基准日 2024-04-20 早于数据起始日 2025-10-28，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688785 基准日 2024-04-20 早于数据起始日 2026-01-28，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688790 基准日 2024-04-20 早于数据起始日 2025-12-16，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688795 基准日 2024-04-20 早于数据起始日 2025-12-05，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688796 基准日 2024-04-20 早于数据起始日 2025-12-10，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688797 基准日 2024-04-20 早于数据起始日 2026-06-24，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688802 基准日 2024-04-20 早于数据起始日 2025-12-17，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688805 基准日 2024-04-20 早于数据起始日 2025-12-24，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688807 基准日 2024-04-20 早于数据起始日 2025-12-19，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688808 基准日 2024-04-20 早于数据起始日 2026-04-24，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688809 基准日 2024-04-20 早于数据起始日 2025-12-30，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688811 基准日 2024-04-20 早于数据起始日 2026-04-10，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688813 基准日 2024-04-20 早于数据起始日 2026-03-31，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688816 基准日 2024-04-20 早于数据起始日 2026-02-11，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688818 基准日 2024-04-20 早于数据起始日 2026-02-10，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sh.688820 基准日 2024-04-20 早于数据起始日 2026-04-21，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001220 基准日 2024-04-20 早于数据起始日 2026-02-03，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001221 基准日 2024-04-20 早于数据起始日 2025-07-30，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001233 基准日 2024-04-20 早于数据起始日 2025-11-25，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001237 基准日 2024-04-20 早于数据起始日 2026-05-22，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001257 基准日 2024-04-20 早于数据起始日 2026-03-31，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001277 基准日 2024-04-20 早于数据起始日 2024-09-03，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001279 基准日 2024-04-20 早于数据起始日 2024-10-11，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001280 基准日 2024-04-20 早于数据起始日 2025-12-03，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001285 基准日 2024-04-20 早于数据起始日 2025-09-30，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001312 基准日 2024-04-20 早于数据起始日 2026-04-21，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001325 基准日 2024-04-20 早于数据起始日 2025-12-18，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001335 基准日 2024-04-20 早于数据起始日 2025-04-15，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001356 基准日 2024-04-20 早于数据起始日 2025-01-23，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001365 基准日 2024-04-20 早于数据起始日 2026-05-18，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001369 基准日 2024-04-20 早于数据起始日 2025-12-30，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001382 基准日 2024-04-20 早于数据起始日 2025-03-21，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001386 基准日 2024-04-20 早于数据起始日 2025-10-22，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001388 基准日 2024-04-20 早于数据起始日 2025-07-01，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001390 基准日 2024-04-20 早于数据起始日 2025-05-29，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001391 基准日 2024-04-20 早于数据起始日 2024-12-30，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001393 基准日 2024-04-20 早于数据起始日 2026-05-15，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001395 基准日 2024-04-20 早于数据起始日 2025-01-27，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001396 基准日 2024-04-20 早于数据起始日 2025-12-30，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001399 基准日 2024-04-20 早于数据起始日 2026-06-26，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.001400 基准日 2024-04-20 早于数据起始日 2025-04-24，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.300784 基准日 2024-04-20 早于数据起始日 2024-06-07，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300846 违规 1/1500（累计 1）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300847 违规 1/1494（累计 2）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300849 违规 1/1493（累计 3）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300850 违规 1/1486（累计 4）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300851 违规 1/1478（累计 5）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300852 违规 1/1492（累计 6）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300887 违规 1/1445（累计 7）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300888 违规 1/1444（累计 8）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300889 违规 1/1435（累计 9）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300890 违规 1/1444（累计 10）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300891 违规 1/1444（累计 11）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300892 违规 1/1439（累计 12）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300895 违规 1/1439（累计 13）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300896 违规 1/1437（累计 14）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300897 违规 1/1432（累计 15）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300898 违规 1/1429（累计 16）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300899 违规 1/1427（累计 17）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300900 违规 1/1420（累计 18）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300901 违规 2/1420（累计 20）
+WARNING:gpsef.data.local_provider:[R-147] vwap 越界(相对>0.1%): code=sz.300902 违规 2/1420（累计 22）
+WARNING:gpsef.data.local_provider:sz.301173 基准日 2024-04-20 早于数据起始日 2025-03-03，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301275 基准日 2024-04-20 早于数据起始日 2025-03-11，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301392 基准日 2024-04-20 早于数据起始日 2024-06-05，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301449 基准日 2024-04-20 早于数据起始日 2025-12-23，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301458 基准日 2024-04-20 早于数据起始日 2025-01-10，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301479 基准日 2024-04-20 早于数据起始日 2025-03-18，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301491 基准日 2024-04-20 早于数据起始日 2025-08-06，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301501 基准日 2024-04-20 早于数据起始日 2025-03-19，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301513 基准日 2024-04-20 早于数据起始日 2026-04-17，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301522 基准日 2024-04-20 早于数据起始日 2024-10-16，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301531 基准日 2024-04-20 早于数据起始日 2026-05-11，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301535 基准日 2024-04-20 早于数据起始日 2025-03-27，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301551 基准日 2024-04-20 早于数据起始日 2024-09-26，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301552 基准日 2024-04-20 早于数据起始日 2024-07-22，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301556 基准日 2024-04-20 早于数据起始日 2024-10-17，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301557 基准日 2024-04-20 早于数据起始日 2025-03-04，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301560 基准日 2024-04-20 早于数据起始日 2025-04-25，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301563 基准日 2024-04-20 早于数据起始日 2025-09-30，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301565 基准日 2024-04-20 早于数据起始日 2024-06-20，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301571 基准日 2024-04-20 早于数据起始日 2024-08-21，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301575 基准日 2024-04-20 早于数据起始日 2025-09-10，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301580 基准日 2024-04-20 早于数据起始日 2024-06-26，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301581 基准日 2024-04-20 早于数据起始日 2025-01-03，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301584 基准日 2024-04-20 早于数据起始日 2025-09-25，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301585 基准日 2024-04-20 早于数据起始日 2024-12-20，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301586 基准日 2024-04-20 早于数据起始日 2024-08-28，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301590 基准日 2024-04-20 早于数据起始日 2025-06-05，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301592 基准日 2024-04-20 早于数据起始日 2024-10-24，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301595 基准日 2024-04-20 早于数据起始日 2025-05-19，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301596 基准日 2024-04-20 早于数据起始日 2024-05-13，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301598 基准日 2024-04-20 早于数据起始日 2024-12-20，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301599 基准日 2024-04-20 早于数据起始日 2026-04-30，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301600 基准日 2024-04-20 早于数据起始日 2024-09-11，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301601 基准日 2024-04-20 早于数据起始日 2025-01-15，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301602 基准日 2024-04-20 早于数据起始日 2025-01-22，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301603 基准日 2024-04-20 早于数据起始日 2024-07-10，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301606 基准日 2024-04-20 早于数据起始日 2024-07-26，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301607 基准日 2024-04-20 早于数据起始日 2024-09-04，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301608 基准日 2024-04-20 早于数据起始日 2024-08-01，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301609 基准日 2024-04-20 早于数据起始日 2025-07-23，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301611 基准日 2024-04-20 早于数据起始日 2024-08-16，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301613 基准日 2024-04-20 早于数据起始日 2024-10-25，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301616 基准日 2024-04-20 早于数据起始日 2025-03-27，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301617 基准日 2024-04-20 早于数据起始日 2024-12-11，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301618 基准日 2024-04-20 早于数据起始日 2024-09-30，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301622 基准日 2024-04-20 早于数据起始日 2024-12-04，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301626 基准日 2024-04-20 早于数据起始日 2024-10-24，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301628 基准日 2024-04-20 早于数据起始日 2024-10-31，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301629 基准日 2024-04-20 早于数据起始日 2025-03-24，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301630 基准日 2024-04-20 早于数据起始日 2025-07-10，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301631 基准日 2024-04-20 早于数据起始日 2024-11-22，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301632 基准日 2024-04-20 早于数据起始日 2025-08-12，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301633 基准日 2024-04-20 早于数据起始日 2024-11-07，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301636 基准日 2024-04-20 早于数据起始日 2025-05-16，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301638 基准日 2024-04-20 早于数据起始日 2025-11-18，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301656 基准日 2024-04-20 早于数据起始日 2025-09-25，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301658 基准日 2024-04-20 早于数据起始日 2025-04-02，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301662 基准日 2024-04-20 早于数据起始日 2025-04-17，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301665 基准日 2024-04-20 早于数据起始日 2025-04-11，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301666 基准日 2024-04-20 早于数据起始日 2026-04-16，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301667 基准日 2024-04-20 早于数据起始日 2025-12-23，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301668 基准日 2024-04-20 早于数据起始日 2025-09-26，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301669 基准日 2024-04-20 早于数据起始日 2026-06-09，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301678 基准日 2024-04-20 早于数据起始日 2025-06-20，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301680 基准日 2024-04-20 早于数据起始日 2026-03-06，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301682 基准日 2024-04-20 早于数据起始日 2026-03-25，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301683 基准日 2024-04-20 早于数据起始日 2026-04-01，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301687 基准日 2024-04-20 早于数据起始日 2025-12-31，使用起始日因子 1.0
+WARNING:gpsef.data.local_provider:sz.301696 基准日 2024-04-20 早于数据起始日 2026-04-10，使用起始日因子 1.0
+INFO:gpsef.pool.dynamic_pool:日线记录总量: 2044315
+INFO:gpsef.pool.dynamic_pool:截面矩阵构建完成: 410 个交易日, 5168 只股票
+INFO:gpsef.backtest.engine:基准数据从本地加载: E:\quant\gpsef_project\data\index_daily\sh000300.parquet (13条)
+WARNING:__main__:[FIX-DET] 溯源模块加载失败(不影响回测): No module named 'strategies.small_alpha191_test3'
+INFO:gpsef.backtest.engine:回测开始: 2024-04-01 -> 2024-04-20
+INFO:gpsef.backtest.engine:初始资金: 1,000,000.00
+INFO:gpsef.backtest.engine:复权基准日: 2024-04-20
+INFO:strategies.small_alpha191.strategy:[C2] 因子快照目录隔离: E:\quant\gpsef_project\data\factor_snapshots_test
+INFO:strategies.small_alpha191.strategy:[L1/L2] 标签模式=staged_rank: 分阶段退出模拟 (S1=4.5σ/25%, S2=4.5σ/35%, S3=6.0σ/20%, S4=9.0σ/20%, hard=-6.0σ, min_abs_ret=0.0)
+INFO:strategies.small_alpha191.data_utils:从基本面快照构建行业映射: 5187 只股票, 截至于=20240401
+INFO:strategies.small_alpha191.strategy:行业映射加载完成，共 5187 只股票 (使用 <= 20240401 快照防前视偏差, 后续从BARRA快照动态补充)
+INFO:strategies.small_alpha191_test3.strategy:[市值缓存] 输入指纹一致 → 复用缓存: 9,386,003 行 / 5440 只 / 2018-01-02~2026-09-02 (零计算, 未写盘; 指纹=b7d01459)
+INFO:strategies.small_alpha191_test3.strategy:[市值缓存] 已加载: 9,386,003 行
+INFO:strategies.small_alpha191.strategy:[Pool] 市值查找索引构建完成: 2104 个交易日
+INFO:strategies.small_alpha191.strategy:[Pool] 第一层选股池 mode=smallcap (index=hs300, prefixes=[], size=300)
+INFO:strategies.small_alpha191.strategy:[Pool] 选股池快照缓存加载: 1542 个交易日 (逐日期指纹全部有效) -> E:\quant\gpsef_project\data\smallcap_pool_cache_o3_20260910.parquet
+INFO:strategies.small_alpha191.strategy:[v3.6] 分阶段退出: enabled=True, S1=4.5σ/25%, S2=4.5σ/35%, S3=6.0σ/20%, hard=-6.0σ, reinvest=False
+INFO:strategies.small_alpha191_test3.strategy:[市值缓存] 输入指纹一致 → 复用缓存: 9,386,003 行 / 5440 只 / 2018-01-02~2026-09-02 (零计算, 未写盘; 指纹=b7d01459)
+INFO:strategies.small_alpha191.strategy:[v3.0] GARCH 波动率目标仓位控制: 已禁用
+INFO:strategies.small_alpha191.strategy:[v3.0] BARRA 约束优化: 已禁用
+INFO:strategies.small_alpha191.strategy:[Q5BAR] BARRA 风险预算式降权: 已禁用（mode=off ⇒ 零影响闭合）
+INFO:strategies.small_alpha191.strategy:============================================================
+INFO:strategies.small_alpha191.strategy:Alpha191 策略初始化完成
+INFO:strategies.small_alpha191.strategy:元标注: 启用
+INFO:strategies.small_alpha191.strategy:调仓周期: 20 天
+INFO:strategies.small_alpha191.strategy:最大持仓: 20
+INFO:strategies.small_alpha191.strategy:PT/SL: pt_mult=6.3, sl_mult=4.7 (统一波动率归一化)
+INFO:strategies.small_alpha191.strategy:V10上游门控: 禁用, snapshot_dir=./data/wyckoff20_v10_recomd_snapshots, max_defer=0d
+INFO:strategies.small_alpha191.strategy:============================================================
+INFO:strategies.small_alpha191.strategy:============================================================
+INFO:strategies.small_alpha191.strategy:[2024-04-01] 调仓日 - 选股流程 (第 1 个交易日, 调仓周期=20)
+INFO:strategies.small_alpha191.strategy:主模型推荐数量: 300
+INFO:strategies.small_alpha191.strategy:[重训间隔] force_retrain (冷启动/强制) → 执行重训
+INFO:strategies.small_alpha191.strategy:[2024-04-01] 开始训练元标注模型...
+INFO:strategies.small_alpha191.strategy:============================================================
+INFO:strategies.small_alpha191.strategy:【开始元标注模型训练（单阶段：直接预测强势盈利）】当前日期: 2024-04-01
+INFO:strategies.small_alpha191.strategy:历史交易日范围: 2018-01-02 ~ 2024-03-29 (共 1515 天)
+INFO:strategies.small_alpha191.strategy:标签封闭的可用交易日: 1495 天 (max_hold_days=20)
+INFO:strategies.small_alpha191.strategy:训练窗口: 2023-03-07 ~ 2024-03-01 (共 240 天)
+INFO:strategies.small_alpha191.strategy:【历史回放】对 240 个训练日逐日运行主模型选股...
+INFO:strategies.small_alpha191.strategy:【历史回放】批量预加载 240 天因子快照（并发）...
+INFO:strategies.small_alpha191.strategy:【历史回放】快照预加载完成: 240/240 有效
+INFO:strategies.small_alpha191.strategy:历史回放进度: 1/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 11/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 21/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 31/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 41/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 51/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 61/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 71/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 81/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 91/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 101/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 111/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 121/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 131/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 141/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 151/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 161/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 171/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 181/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 191/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 201/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 211/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 221/240
+INFO:strategies.small_alpha191.strategy:历史回放进度: 231/240
+INFO:strategies.small_alpha191.strategy:【历史回放完成】240/240 个训练日有样本，跳过 0 个
+INFO:strategies.small_alpha191.strategy:合并后数据形状: (72000, 222), 列数: 222
+INFO:strategies.small_alpha191.strategy:开始生成三分类标签...
+INFO:strategies.small_alpha191.labels:[分阶段标签] 开始处理 845 只股票 (max_workers=8)
+INFO:strategies.small_alpha191.labels:[分阶段标签] 完成: 845 只股票, 72000 事件, 总耗时=89.4s
+INFO:strategies.small_alpha191.strategy:[L2] 窄池+分阶段标签（排序/回归目标）: 240 个训练日, 平均每组 300.0 只, bin(分位) mean=0.502, realized_ret mean=+0.0029 median=-0.0333 范围=[-0.2193, 0.4911], 退出分布={'stop_loss': 52491, 'expire': 10267, 'profit_take': 9242}
+INFO:strategies.small_alpha191.strategy:标签数据形状: (72000, 6), 标签分布:
+{0.9233333333333333: 240, 0.8033333333333333: 240, 0.09666666666666666: 240, 0.06666666666666667: 240, 0.03666666666666667: 240, 0.05333333333333334: 240, 0.05: 240, 0.7: 240, 0.04666666666666667: 240, 0.5166666666666667: 240, 0.07: 240, 0.07333333333333333: 240, 0.08333333333333333: 240, 0.10333333333333333: 240, 0.13333333333333333: 240, 0.09333333333333334: 240, 0.69: 240, 0.7133333333333334: 240, 0.6933333333333334: 240, 0.8666666666666667: 240, 0.96: 240, 0.17333333333333334: 240, 0.17666666666666667: 240, 0.18333333333333332: 240, 0.16333333333333333: 240, 0.18: 240, 0.8233333333333334: 240, 0.58: 240, 0.36: 240, 0.36333333333333334: 240, 0.12666666666666668: 240, 0.043333333333333335: 240, 0.06: 240, 0.08666666666666667: 240, 0.14: 240, 0.09: 240, 0.12: 240, 0.16666666666666666: 240, 0.11666666666666667: 240, 0.15333333333333332: 240, 0.19: 240, 0.9433333333333334: 240, 0.9033333333333333: 240, 0.9966666666666667: 240, 0.0033333333333333335: 240, 0.7666666666666667: 240, 0.06333333333333334: 240, 0.28: 240, 0.006666666666666667: 240, 0.01: 240, 0.013333333333333334: 240, 0.023333333333333334: 240, 0.016666666666666666: 240, 0.36666666666666664: 240, 0.18666666666666668: 240, 0.12333333333333334: 240, 0.3433333333333333: 240, 0.48: 240, 0.17: 240, 0.6033333333333334: 240, 0.2733333333333333: 240, 0.056666666666666664: 240, 0.04: 240, 0.13666666666666666: 240, 0.8: 240, 0.7966666666666666: 240, 0.79: 240, 0.75: 240, 0.6066666666666667: 240, 0.6233333333333333: 240, 0.33: 240, 0.8933333333333333: 240, 0.9366666666666666: 240, 0.9466666666666667: 240, 0.89: 240, 0.7933333333333333: 240, 0.78: 240, 0.7633333333333333: 240, 0.95: 240, 0.43333333333333335: 240, 0.9066666666666666: 240, 0.8566666666666667: 240, 0.91: 240, 0.7733333333333333: 240, 0.94: 240, 0.9566666666666667: 240, 0.10666666666666667: 240, 0.42: 240, 0.8333333333333334: 240, 0.11333333333333333: 240, 0.14333333333333334: 240, 0.13: 240, 0.11: 240, 0.26: 240, 0.27: 240, 0.26666666666666666: 240, 0.29333333333333333: 240, 0.31333333333333335: 240, 0.33666666666666667: 240, 0.4066666666666667: 240, 0.93: 240, 0.25666666666666665: 240, 0.23333333333333334: 240, 0.22333333333333333: 240, 0.25333333333333335: 240, 0.98: 240, 0.9166666666666666: 240, 0.71: 240, 0.83: 240, 0.65: 240, 0.5566666666666666: 240, 0.7033333333333334: 240, 0.5333333333333333: 240, 0.6866666666666666: 240, 0.8133333333333334: 240, 0.66: 240, 0.3466666666666667: 240, 0.3333333333333333: 240, 0.35: 240, 0.2833333333333333: 240, 0.30333333333333334: 240, 0.22666666666666666: 240, 0.24333333333333335: 240, 0.43: 240, 0.45666666666666667: 240, 0.44666666666666666: 240, 0.5466666666666666: 240, 0.64: 240, 0.68: 240, 0.84: 240, 0.03333333333333333: 240, 0.9933333333333333: 240, 0.77: 240, 1.0: 240, 0.99: 240, 0.97: 240, 0.9766666666666667: 240, 0.9866666666666667: 240, 0.02: 240, 0.03: 240, 0.14666666666666667: 240, 0.1: 240, 0.07666666666666666: 240, 0.6: 240, 0.7466666666666667: 240, 0.15666666666666668: 240, 0.24666666666666667: 240, 0.41333333333333333: 240, 0.59: 240, 0.4766666666666667: 240, 0.8966666666666666: 240, 0.63: 240, 0.82: 240, 0.6466666666666666: 240, 0.15: 240, 0.31: 240, 0.5933333333333334: 240, 0.39666666666666667: 240, 0.49333333333333335: 240, 0.25: 240, 0.8733333333333333: 240, 0.92: 240, 0.6366666666666667: 240, 0.5633333333333334: 240, 0.53: 240, 0.5966666666666667: 240, 0.8266666666666667: 240, 0.8633333333333333: 240, 0.6966666666666667: 240, 0.86: 240, 0.7566666666666667: 240, 0.8166666666666667: 240, 0.27666666666666667: 240, 0.9333333333333333: 240, 0.9733333333333334: 240, 0.85: 240, 0.9833333333333333: 240, 0.88: 240, 0.6433333333333333: 240, 0.6133333333333333: 240, 0.30666666666666664: 240, 0.5866666666666667: 240, 0.4633333333333333: 240, 0.38333333333333336: 240, 0.02666666666666667: 240, 0.6166666666666667: 240, 0.08: 240, 0.9633333333333334: 240, 0.9: 240, 0.8766666666666667: 240, 0.6766666666666666: 240, 0.9666666666666667: 240, 0.22: 240, 0.29: 240, 0.8833333333333333: 240, 0.9266666666666666: 240, 0.5666666666666667: 240, 0.51: 240, 0.5: 240, 0.41: 240, 0.44333333333333336: 240, 0.55: 240, 0.67: 240, 0.72: 240, 0.73: 240, 0.7866666666666666: 240, 0.76: 240, 0.49: 240, 0.8533333333333334: 240, 0.7533333333333333: 240, 0.7433333333333333: 240, 0.62: 240, 0.6566666666666666: 240, 0.61: 240, 0.6266666666666667: 240, 0.20333333333333334: 240, 0.7233333333333334: 240, 0.7266666666666667: 240, 0.9533333333333334: 240, 0.23666666666666666: 240, 0.8066666666666666: 240, 0.6833333333333333: 240, 0.5733333333333334: 240, 0.8366666666666667: 240, 0.5133333333333333: 240, 0.6533333333333333: 240, 0.5033333333333333: 240, 0.5233333333333333: 240, 0.7166666666666667: 240, 0.31666666666666665: 240, 0.47333333333333333: 240, 0.8433333333333334: 240, 0.43666666666666665: 240, 0.47: 240, 0.5266666666666666: 240, 0.87: 240, 0.34: 240, 0.6666666666666666: 240, 0.7766666666666666: 240, 0.46: 240, 0.3933333333333333: 240, 0.6333333333333333: 240, 0.7833333333333333: 240, 0.5833333333333334: 240, 0.56: 240, 0.3566666666666667: 240, 0.6733333333333333: 240, 0.81: 240, 0.5366666666666666: 240, 0.8866666666666667: 240, 0.16: 240, 0.2: 240, 0.23: 240, 0.45: 240, 0.5766666666666667: 240, 0.2633333333333333: 240, 0.37: 240, 0.32: 240, 0.24: 240, 0.48333333333333334: 240, 0.3233333333333333: 240, 0.6633333333333333: 240, 0.8466666666666667: 240, 0.54: 240, 0.32666666666666666: 240, 0.2866666666666667: 240, 0.5066666666666667: 240, 0.5433333333333333: 240, 0.4533333333333333: 240, 0.57: 240, 0.5533333333333333: 240, 0.20666666666666667: 240, 0.21: 240, 0.35333333333333333: 240, 0.44: 240, 0.52: 240, 0.7066666666666667: 240, 0.4666666666666667: 240, 0.4166666666666667: 240, 0.4866666666666667: 240, 0.4266666666666667: 240, 0.39: 240, 0.7333333333333333: 240, 0.4033333333333333: 240, 0.38: 240, 0.4: 240, 0.49666666666666665: 240, 0.9133333333333333: 240, 0.42333333333333334: 240, 0.38666666666666666: 240, 0.3: 239, 0.19666666666666666: 239, 0.21333333333333335: 239, 0.7366666666666667: 239, 0.2966666666666667: 239, 0.19333333333333333: 239, 0.21666666666666667: 239, 0.37666666666666665: 239, 0.74: 239, 0.37333333333333335: 239, 0.375: 2, 0.195: 2, 0.7383333333333333: 2, 0.29833333333333334: 2, 0.215: 2}
+INFO:strategies.small_alpha191.strategy:训练样本总数: 72000, 标签(分位)统计: mean=0.502 std=0.289 min=0.003 max=1.000
+INFO:strategies.small_alpha191.strategy:开始因子中性化...
+INFO:strategies.small_alpha191.strategy:中性化前因子数: 210

@@ -1,0 +1,51 @@
+================================================================================================
+[TIDY2] 归档 strategies/ 历史备份目录  2026-10-08 16:41:52  模式=APPLY
+================================================================================================
+
+[1] 待归档目录（16 个）
+目录                                                         体积    文件数
+------------------------------------------------------------------------
+strategies\alpha191\backup_20260730_1400                0.32 MB      6
+strategies\alpha191\backup_20260730_1805                0.33 MB      6
+strategies\alpha191\backup_20260731_1117                0.41 MB      8
+strategies\alpha191\backup_20260801_0003                0.41 MB      8
+strategies\alpha191\backup_20260801_0355                0.20 MB      2
+strategies\alpha191\backup_20260801_1218                0.21 MB      3
+strategies\alpha191\backup_20260801_1332                0.37 MB      5
+strategies\alpha191\backup_20260801_1535                0.34 MB      4
+strategies\alpha191\backup_20260801_1550                0.05 MB      1
+strategies\alpha191\backup_20260802_1232                0.42 MB      5
+strategies\alpha191\backup_20260802_2152_标签权重归因无效       0.42 MB      5
+strategies\alpha191\backup_20260803_1100                0.42 MB      5
+strategies\wyckoff20\backup_20260725                    0.00 MB      0
+strategies\wyckoff20\backup_20260801_2140               0.08 MB      2
+strategies\wyckoff20\backups                            0.25 MB      3
+strategies\wyckoff20\ols_debug                          0.08 MB      4
+------------------------------------------------------------------------
+合计                                                      4.32 MB     67
+
+[2] ★白名单自证（这些必须仍在）
+    strategies/wyckoff20/barra_constraint.py                   存在 ✓
+    strategies/wyckoff20/barra_builder.py                      存在 ✓
+    strategies/small_alpha191/strategy.py                      存在 ✓
+    strategies/small_alpha191/determinism_provenance.pyc       存在 ✓
+    strategies/alpha191/config.yaml                            存在 ✓
+
+[3] 执行归档 → E:\quant\gpsef_archive_20261008_1641_strategies_backupdirs
+
+[4] 结果：搬走 16 个目录，失败 0
+
+[5] ★后置自证：白名单文件仍在
+    strategies/wyckoff20/barra_constraint.py                   ✓
+    strategies/small_alpha191/strategy.py                      ✓
+    strategies/small_alpha191/determinism_provenance.pyc       ✓
+    ⇒ ✅ 全部在
+
+[6] 归档后 strategies/ 结构
+    alpha191/                     20 项
+    fundamental_ml/                6 项
+    grid_lowvol/                   6 项
+    small_alpha191/               14 项
+    wyckoff20/                    17 项
+
+[done] 归档 = E:\quant\gpsef_archive_20261008_1641_strategies_backupdirs

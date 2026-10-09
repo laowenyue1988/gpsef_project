@@ -1,0 +1,11 @@
+﻿T0
+  pid=7192 cpu=0.1s
+  pid=10764 cpu=0.2s
+  pid=25144 cpu=119.8s
+  pid=36388 cpu=124.2s
+T1 (+25s)
+  pid=7192 cpu=0.1s  delta=0.00s
+  pid=10764 cpu=0.2s  delta=0.00s
+  pid=25144 cpu=144.4s  delta=0.02s
+  pid=36388 cpu=148.9s  delta=0.00s
+avail 14,457 MB | commit_free 30,112 MB

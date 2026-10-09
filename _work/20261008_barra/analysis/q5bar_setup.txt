@@ -1,0 +1,22 @@
+====================================================================================================
+[Q5BAR] 搭台  2026-10-08 16:11:52
+====================================================================================================
+[1] 基线 = results/SmallAlpha191Test3_Q5R_OPT_dump_full_20260923/config.yaml
+    顶层键 55 | strategy.class=strategies.small_alpha191_test3.strategy.SmallAlpha191Strategy | barra.enabled=False
+    experiment 段（剔除前） = {"preds_mode": "dump", "cache_dir": "_q5r_cache_full"}
+
+[2] 生成臂配置
+    Z1  _work/20261008_barra/configs/config_Z1.yaml 零影响验证（mode=off）
+    B1  _work/20261008_barra/configs/config_B1.yaml 真实暴露 λ=0.30
+    S1  _work/20261008_barra/configs/config_S1.yaml sham：暴露同分布置换
+
+[3] 配置互比（差异键必须**只**在 barra.risk_budget 内）
+    Z1 vs B1: 差异 5 键 ⇒ ['barra.risk_budget.exclude_quantile', 'barra.risk_budget.factors', 'barra.risk_budget.min_coverage', 'barra.risk_budget.mode', 'barra.risk_budget.strength']
+        非 barra.risk_budget 的差异 = 无  ✅
+    Z1 vs S1: 差异 6 键 ⇒ ['barra.risk_budget.exclude_quantile', 'barra.risk_budget.factors', 'barra.risk_budget.min_coverage', 'barra.risk_budget.mode', 'barra.risk_budget.shuffle_seed', 'barra.risk_budget.strength']
+        非 barra.risk_budget 的差异 = 无  ✅
+
+[4] 启动器 _work/20261008_barra/run_smoke.sh（三臂并行；预置 7 环境变量；逐臂 tee 到 _work/20261008_barra/logs/）
+
+[5] 代码指纹
+    strategies/small_alpha191/strategy.py        md5=ebd17cb1c19493ec  318257 B

@@ -1,0 +1,34 @@
+================================================================================================
+[Q5BAR] 运行时依赖闭包预检  包=strategies.small_alpha191  种子=strategy
+================================================================================================
+[1] 闭包内模块 7 个（strategies.small_alpha191）
+     barriers                                                   barriers.py
+     data_utils                                                 data_utils.py
+     determinism_provenance                                     determinism_provenance.pyc
+     ensemble                                                   ensemble.py
+     garch_position                                             garch_position.py
+     labels                                                     labels.py
+     strategy                                                   strategy.py
+
+[2] 逐个真实 import（★含函数内/条件分支内的依赖）
+     OK   barriers                                             file=barriers.py
+     OK   data_utils                                           file=data_utils.py
+     OK   determinism_provenance                               file=determinism_provenance.pyc
+     OK   ensemble                                             file=ensemble.py
+     OK   garch_position                                       file=garch_position.py
+     OK   labels                                               file=labels.py
+     OK   strategy                                             file=strategy.py
+
+[2b] ★跨包引用扫描（同项目内、非本包 ⇒ 策略包迁移/替换后的定时炸弹）
+     OK   gpsef.backtest.engine                                    ← strategy
+     OK   gpsef.core                                               ← strategy
+     OK   gpsef.utils.neutralizer                                  ← strategy
+     豁免 strategies.small_alpha191_test3.target_transforms        ← strategy
+          理由: 不可达：仅当 config['meta_labeling']['target_transform'] != 'none' 时执行（strategy.py:3205 条件分支）；当前全部在跑与待起配置（Z1/B1/S1/V1/V2/V3 及采纳包）均无该键 ⇒ 恒为 'none' ⇒ 分支永不执行。已登记为定时炸弹（D-348 §5-1），**限期在 2026-10-09 长窗落臂后修复**（改为包内导入 + fallback；修码须避在跑批次）。
+     OK   strategies.wyckoff20.barra_builder                       ← strategy
+     OK   strategies.wyckoff20.barra_constraint                    ← strategy
+
+[3] 外部顶层依赖（信息）：arch, baostock, collections, concurrent, dataclasses, datetime, gc, glob, gm, gpsef, hashlib, json, lightgbm, logging, multiprocessing, numba, numpy, os, pandas, pickle, pyarrow, random, scipy, sklearn, statsmodels, strategies, threading, time, traceback, typing, warnings, xgboost
+
+================================================================================================
+✅ 预检 PASS —— 运行时依赖闭包完整（7 模块全可 import）

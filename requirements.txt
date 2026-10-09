@@ -1,0 +1,26 @@
+# GPSEF 框架依赖
+# 核心数据处理
+pandas>=1.3.0
+numpy>=1.20.0
+pyyaml>=5.4.0
+
+# 数据源
+baostock>=0.8.8
+
+# 机器学习（Alpha191 等策略需要）
+xgboost>=1.5.0
+scikit-learn>=1.0.0
+scipy>=1.7.0
+
+# 超参数优化
+optuna>=3.0.0
+
+# 可视化（回测报告生成）
+matplotlib>=3.4.0
+seaborn>=0.11.0
+
+# 性能加速（可选）
+numba>=0.55.0
+
+# 其他工具
+tqdm>=4.62.0

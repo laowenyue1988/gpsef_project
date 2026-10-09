@@ -1,0 +1,58 @@
+================================================================================================
+[TIDY] 策略目录/项目根 杂物盘点  2026-10-08 16:39:04  模式=DRY
+================================================================================================
+
+[1] 分类结果
+    bak_files     28 项  3457.84 KB
+    pycache        2 项  —
+    empty_dirs     1 项  —
+    stray_pyc      0 项  —
+    根目录 .bak 类 0 项
+
+[2] 明细（前 25 项）
+    [bak_files ] strategies\alpha191\data_utils.py.bak_E4_20260910_163005
+    [bak_files ] strategies\alpha191\ensemble.py.bak_20260811_trainauc
+    [bak_files ] strategies\alpha191\factor_validator.py.bak_20260819_remove
+    [bak_files ] strategies\alpha191\labels.py.bak_E6_20260910_110731
+    [bak_files ] strategies\alpha191\labels.py.bak_O3A_20260910_161140
+    [bak_files ] strategies\alpha191\labels.py.bak_R6C3_20260910_162706
+    [bak_files ] strategies\alpha191\labels.py.bak_R6C3_20260910_162755
+    [bak_files ] strategies\alpha191\strategy.py.bak_000fix_20260908_2230
+    [bak_files ] strategies\alpha191\strategy.py.bak_20260807_pit
+    [bak_files ] strategies\alpha191\strategy.py.bak_20260811_dupfix
+    [bak_files ] strategies\alpha191\strategy.py.bak_E4_20260910_163005
+    [bak_files ] strategies\alpha191\strategy.py.bak_E6_20260910_110731
+    [bak_files ] strategies\alpha191\strategy.py.bak_EXDIV_20260910_162000
+    [bak_files ] strategies\alpha191\strategy.py.bak_O3A_20260910_161140
+    [bak_files ] strategies\alpha191\strategy.py.bak_R6C3_20260910_162609
+    [bak_files ] strategies\alpha191\strategy.py.bak_REFAUTO_20260910_172000
+    [bak_files ] strategies\alpha191\strategy.py.bak_UNIFY_20260910_164319
+    [bak_files ] strategies\small_alpha191\strategy.py.bak_preQ5BAR_20261008_1608
+    [bak_files ] strategies\wyckoff20\barra_builder.py.bak_postD1Fix_20260915_193850
+    [bak_files ] strategies\wyckoff20\barra_builder.py.bak_preD1Fix_reconstructed_20260915
+    [bak_files ] strategies\wyckoff20\build_snapshots.py.bak_preD3_20260915_194727
+    [bak_files ] strategies\wyckoff20\factor_validator.py.bak_20260818_remove
+    [bak_files ] strategies\wyckoff20\gpsef_strategy_v10.py.bak_20260807_pit
+    [bak_files ] strategies\wyckoff20\backup_20260725\barra_builder.py.bak
+    [bak_files ] strategies\wyckoff20\backup_20260725\barra_constraint.py.bak
+
+[3] ★白名单自证（必须全部存在、且不被搬走）
+    strategies\small_alpha191\determinism_provenance.pyc     存在 ✓
+
+[4] strategies/small_alpha191 运行文件清单（13 项，归档后须逐字节不变）
+    __init__.py                                     4689 B
+    barriers.py                                     2373 B
+    benchmark.py                                     983 B
+    data_utils.py                                  12474 B
+    determinism_provenance.pyc                     23357 B
+    ensemble.py                                   171515 B
+    factors.py                                    101937 B
+    garch_position.py                              25509 B
+    labels.py                                      72682 B
+    snapshot.py                                    14694 B
+    snapshot_fast.py                               46445 B
+    snapshots.py                                   18097 B
+    strategy.py                                   318257 B
+    → 指纹已写 _work/20261008_barra/tmp/strategies_runtime_fp.json
+
+[DRY] 未做任何改动。加 --apply 执行归档。

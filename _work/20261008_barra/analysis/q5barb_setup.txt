@@ -1,0 +1,21 @@
+====================================================================================================
+[Q5BAR-B] 搭台  2026-10-08 16:34:05
+====================================================================================================
+[1] 锚配置 barra 段 = {"enabled": false, "snapshot_dir": "./data/barra_exposures", "baseline_index_code": "csi800", "risk_aversion": 0.5, "max_weight": 0.1, "lambda_dev": 0.2, "lambda_l2": 0.3, "lambda_ind": 0.3, "expected_ic": 0.05, "alpha_scale": 10.0, "vol_target": 0.15}
+
+[2] 生成臂配置（烟测窗 20240401~20240801）
+    V1  _work/20261008_barra/configs/config_V1.yaml risk_av=0.50 λ_dev=0.20 λ_l2=0.30 λ_ind=0.30  当年档复现
+    V2  _work/20261008_barra/configs/config_V2.yaml risk_av=2.00 λ_dev=0.20 λ_l2=1.00 λ_ind=0.30  风控主导档
+    V3  _work/20261008_barra/configs/config_V3.yaml risk_av=0.05 λ_dev=0.02 λ_l2=0.05 λ_ind=0.05  纯alpha端（R-195 替代探针）
+
+[3] 纯度断言：三配置差异必须**只**在 barra 段内
+    V1 vs V2: 差异 2 键 ⇒ ['barra.lambda_l2', 'barra.risk_aversion']
+        非 barra.* 差异 = 无  ✅
+    V1 vs V3: 差异 4 键 ⇒ ['barra.lambda_dev', 'barra.lambda_ind', 'barra.lambda_l2', 'barra.risk_aversion']
+        非 barra.* 差异 = 无  ✅
+
+[4] 快照目录内容级基线（R-156）
+    快照文件数 = 518  基线已写 _work/20261008_barra/analysis/snapshot_baseline_20261008_1634.csv
+    md5(清单) = 8773cfb51f68edd6
+
+[5] 启动器 = _work/20261008_barra/run_solveweight.sh（V1+V2 两臂；★待槽位腾出后手动起）

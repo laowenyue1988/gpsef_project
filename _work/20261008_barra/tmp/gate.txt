@@ -1,0 +1,5 @@
+﻿C: free 47,223 MB
+E: free 209,017 MB
+avail 15,010 MB | commit_free 32,025 MB
+python procs = 2
+bash procs = 3

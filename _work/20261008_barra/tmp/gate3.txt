@@ -1,0 +1,4 @@
+﻿C: free 46,905 MB
+E: free 209,001 MB
+avail 17,288 MB | commit_free 32,972 MB
+python=0  tee=0

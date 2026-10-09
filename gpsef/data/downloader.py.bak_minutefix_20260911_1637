@@ -1,0 +1,1730 @@
+# -*- coding: utf-8 -*-
+"""
+独立数据下载模块
+支持增量下载原始日线、后复权因子、股票列表、分钟K线（串行，超时自动跳过）
+
+融合版：保留智能跳过 + 详细日志 + v3连接稳定性改进 + 向量化时间解析
+"""
+
+import os, sys, time, logging, glob, socket, concurrent.futures, gc
+from datetime import datetime, timedelta
+from typing import Optional, List, Tuple, Dict
+import pandas as pd
+import numpy as np
+
+try:
+    import baostock as bs
+except ImportError:
+    raise ImportError("baostock未安装，请执行: pip install baostock")
+
+logger = logging.getLogger(__name__)
+
+VALID_STOCK_PREFIXES = (
+    'sh.600', 'sh.601', 'sh.603', 'sh.605', 'sh.688', 'sh.689',
+    'sz.000', 'sz.001', 'sz.002', 'sz.003', 'sz.300', 'sz.301', 'sz.302'
+)
+
+MINUTE_FREQ_MAP = {'5': '5min', '15': '15min', '30': '30min', '60': '60min'}
+SUPPORTED_MINUTE_FREQ = ['5', '15', '30', '60']
+
+# 需要触发强制重连的错误关键词/错误码
+RECONNECT_ERROR_PATTERNS = [
+    'timeout', 'socket', '10054', '10002007', '网络接收错误',
+    '连接', 'reset', 'broken pipe', 'connection',
+    # [2026-09-01] 会话失效: baostock 长连接被服务端断开后, 本地 _logged_in 仍为 True,
+    #   查询返回 "用户未登录" (错误码 10003)。此错误必须触发强制重登, 否则重试全失败。
+    '未登录', 'not logged', 'login',
+]
+
+
+def _is_reconnect_needed(error_msg: str) -> bool:
+    """判断错误是否需要强制重连"""
+    if not error_msg:
+        return False
+    err_lower = error_msg.lower()
+    return any(p in err_lower for p in RECONNECT_ERROR_PATTERNS)
+
+
+# ======================== 向量化时间解析 ========================
+
+def _parse_minute_time_vectorized(dates: pd.Series, times: pd.Series) -> Tuple[pd.Series, pd.Series]:
+    """向量化解析分钟线时间，比逐行 iterrows 快 50-100 倍。"""
+    dates_str = dates.astype(str).str.strip()
+    times_str = times.astype(str).str.strip()
+
+    has_dash = dates_str.str.contains('-')
+    years = pd.Series(np.int32(0), index=dates.index)
+    months = pd.Series(np.int32(0), index=dates.index)
+    days = pd.Series(np.int32(0), index=dates.index)
+
+    if has_dash.any():
+        parts = dates_str[has_dash].str.split('-', expand=True)
+        years[has_dash] = parts[0].astype(np.int32)
+        months[has_dash] = parts[1].astype(np.int32)
+        days[has_dash] = parts[2].astype(np.int32)
+
+    no_dash = ~has_dash
+    if no_dash.any():
+        d = dates_str[no_dash]
+        years[no_dash] = d.str[:4].astype(np.int32)
+        months[no_dash] = d.str[4:6].astype(np.int32)
+        days[no_dash] = d.str[6:8].astype(np.int32)
+
+    hours = pd.Series(np.int32(0), index=times.index)
+    mins = pd.Series(np.int32(0), index=times.index)
+    secs = pd.Series(np.int32(0), index=times.index)
+
+    t = times_str
+    t_len = t.str.len()
+
+    mask14 = t_len >= 14
+    if mask14.any():
+        t14 = t[mask14]
+        hours[mask14] = t14.str[8:10].astype(np.int32)
+        mins[mask14] = t14.str[10:12].astype(np.int32)
+        secs[mask14] = t14.str[12:14].astype(np.int32)
+
+    mask6 = (~mask14) & (t_len >= 5)
+    if mask6.any():
+        t6 = t[mask6]
+        hours[mask6] = t6.str[:2].astype(np.int32)
+        mins[mask6] = t6.str[2:4].astype(np.int32)
+        secs[mask6] = t6.str[4:6].astype(np.int32)
+
+    mask_short = (~mask14) & (~mask6)
+    if mask_short.any():
+        t_s = t[mask_short].astype(np.int64)
+        hours[mask_short] = (t_s // 100).astype(np.int32)
+        mins[mask_short] = (t_s % 100).astype(np.int32)
+
+    try:
+        trade_time = pd.to_datetime(
+            pd.DataFrame({
+                'year': years, 'month': months, 'day': days,
+                'hour': hours, 'minute': mins, 'second': secs
+            })
+        )
+    except Exception:
+        trade_time = pd.NaT
+        logger.warning("向量化时间解析失败，返回 NaT")
+
+    trade_date = trade_time.dt.normalize() if hasattr(trade_time, 'dt') else pd.NaT
+    return trade_time, trade_date
+
+
+# ======================== BaostockSession ========================
+
+class BaostockLoginBlockedError(Exception):
+    """baostock 登录连续失败, 疑似 IP/端口被封禁。
+
+    出现此异常时【必须停止整个下载】——继续重试只会加剧封禁
+    (baostock 风控按失败次数累加, 越试越封)。
+    """
+
+
+class BaostockSession:
+    """
+    baostock 连接管理单例。
+    核心策略：每次错误后彻底杀掉旧连接，重新 login 拿到新 socket。
+
+    [2026-09-01 封禁处理重构] 原实现连续 3 轮登录失败 → 抛 BaostockLoginBlockedError
+    终止整个下载。但封禁是暂时的, 终止任务无意义且用户需手动重启。
+    现改为: 登录失败 → 指数退避冷却(60s→600s 封顶) → 冷却期内【跳过股票不登录】
+    (避免加剧封禁) → 冷却结束重新登录 → 继续后续股票。整个下载永不因登录失败终止。
+    """
+    _instance = None
+    _logged_in = False
+    _last_activity = None
+    _socket_timeout = 30
+    _reconnect_interval = 50
+    _operation_count = 0
+    _consecutive_errors = 0
+    _max_consecutive_errors = 3
+    _login_fail_count = 0          # 连续登录失败轮数 (每轮内部 3 次尝试)
+    _login_cooldown_until = 0.0    # 登录冷却截止时间戳 (冷却期内不尝试登录)
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def _kill_connection(self):
+        """彻底杀掉 baostock 内部连接"""
+        logger.debug("[BaoStock] 清理旧连接...")
+        try:
+            bs.logout()
+        except:
+            pass
+        try:
+            if hasattr(bs, 'context') and bs.context is not None:
+                ctx = bs.context
+                if hasattr(ctx, '_BsContext__api'):
+                    api = ctx._BsContext__api
+                    if hasattr(api, '_socket') and api._socket is not None:
+                        try:
+                            api._socket.shutdown(socket.SHUT_RDWR)
+                        except:
+                            pass
+                        try:
+                            api._socket.close()
+                        except:
+                            pass
+                        api._socket = None
+                if hasattr(ctx, '_BsContext__is_connected'):
+                    ctx._BsContext__is_connected = False
+        except Exception as e:
+            logger.debug(f"[BaoStock] 清理socket异常(可忽略): {e}")
+        gc.collect()
+        self._logged_in = False
+        time.sleep(0.5)
+
+    def _login_cooldown_seconds(self) -> float:
+        """登录失败冷却时间: 指数退避 60s → 600s 封顶 (第1轮60s, 第2轮120s, ...)"""
+        return min(600.0, 60.0 * (2 ** max(self._login_fail_count - 1, 0)))
+
+    def login(self, force=False):
+        if self._logged_in and not force:
+            return True
+
+        # [2026-09-01] 冷却期内不尝试登录 (避免加剧封禁): 直接返回 False,
+        #   调用方应跳过当前股票继续后续。
+        now = time.time()
+        if now < self._login_cooldown_until:
+            remain = self._login_cooldown_until - now
+            logger.warning(f"[BaoStock] 登录冷却中, 剩余 {remain:.0f}s → 跳过当前操作")
+            return False
+
+        if self._logged_in and force:
+            self._kill_connection()
+        self._logged_in = False
+        socket.setdefaulttimeout(self._socket_timeout)
+        logger.info(f"[BaoStock] 登录中... (socket_timeout={self._socket_timeout}s)")
+        max_login_retries = 3
+        for login_attempt in range(max_login_retries):
+            try:
+                lg = bs.login()
+                if lg.error_code == '0':
+                    self._logged_in = True
+                    self._last_activity = time.time()
+                    self._operation_count = 0
+                    self._consecutive_errors = 0
+                    self._login_fail_count = 0  # 登录成功, 清零连续失败轮数
+                    self._login_cooldown_until = 0.0
+                    logger.info("[BaoStock] 登录成功")
+                    return True
+                else:
+                    logger.warning(f"[BaoStock] 登录返回错误: {lg.error_code} {lg.error_msg}")
+            except (socket.timeout, OSError, ConnectionResetError, BrokenPipeError) as e:
+                logger.warning(f"[BaoStock] 登录网络异常: {e}")
+            except Exception as e:
+                logger.warning(f"[BaoStock] 登录异常: {e}")
+            self._kill_connection()
+            wait = 3 * (login_attempt + 1)
+            logger.info(f"[BaoStock] 登录失败，{wait}s 后重试 ({login_attempt + 1}/{max_login_retries})")
+            time.sleep(wait)
+
+        # [2026-09-01 封禁处理重构] 一轮(3次尝试)登录全部失败:
+        #   不再抛异常终止整个下载 —— 封禁是暂时的, 终止任务无意义。
+        #   进入指数退避冷却, 冷却期内跳过股票; 冷却结束后自动重试登录。
+        self._login_fail_count += 1
+        cooldown = self._login_cooldown_seconds()
+        self._login_cooldown_until = time.time() + cooldown
+        logger.warning(
+            f"[BaoStock] 登录失败(连续第 {self._login_fail_count} 轮, "
+            f"共 {self._login_fail_count * max_login_retries} 次尝试) → "
+            f"疑似 IP/端口被 baostock 风控。冷却 {cooldown:.0f}s 后自动重登, "
+            f"期间跳过股票避免加剧封禁。"
+        )
+        return False
+
+    def logout(self):
+        try:
+            bs.logout()
+        except:
+            pass
+        self._logged_in = False
+
+    def ensure_logged_in(self):
+        """确保已登录。登录失败/冷却中 → 返回 False (调用方应跳过当前股票)。"""
+        if not self._logged_in:
+            return self.login()
+        now = time.time()
+        if self._last_activity and (now - self._last_activity) > 300:
+            try:
+                rs = bs.query_stock_basic(code="sh.600000")
+                if rs is None or rs.error_code != '0':
+                    logger.warning("[BaoStock] 连接检测失败，正在重连...")
+                    return self.login(force=True)
+            except Exception:
+                logger.warning("[BaoStock] 连接检测异常，正在重连...")
+                return self.login(force=True)
+        self._last_activity = now
+        return True
+
+    def update_activity(self):
+        self._last_activity = time.time()
+        self._operation_count += 1
+        if self._operation_count >= self._reconnect_interval:
+            logger.info(f"[BaoStock] 已执行 {self._operation_count} 次操作，主动重连刷新连接")
+            self.login(force=True)
+
+    def report_error(self, error_msg: str):
+        self._consecutive_errors += 1
+        if _is_reconnect_needed(error_msg):
+            logger.warning(f"[BaoStock] 网络错误 (连续第 {self._consecutive_errors} 次): {error_msg}")
+            self.login(force=True)
+        else:
+            logger.debug(f"[BaoStock] 非网络错误 (连续第 {self._consecutive_errors} 次): {error_msg}")
+        if self._consecutive_errors >= self._max_consecutive_errors:
+            cool_down = min(60, 10 * (2 ** (self._consecutive_errors - self._max_consecutive_errors)))
+            logger.warning(f"[BaoStock] 连续 {self._consecutive_errors} 次错误，全局冷却 {cool_down}s...")
+            time.sleep(cool_down)
+            self.login(force=True)
+            return 3
+        else:
+            backoff = min(30, 3 * (2 ** (self._consecutive_errors - 1)))
+            return backoff
+
+    def is_login_error(self, error_msg: str) -> bool:
+        """判断错误是否为登录/会话失效类 (用户未登录/10003/登录失败等)。"""
+        if not error_msg:
+            return False
+        err_lower = error_msg.lower()
+        return any(p in err_lower for p in
+                   ('未登录', 'not logged', '10003', 'login', '登录'))
+
+    def report_success(self):
+        self._consecutive_errors = 0
+
+
+_session = BaostockSession()
+
+
+def get_baostock_session():
+    return _session
+
+
+# ======================== DataDownloader ========================
+
+class DataDownloader:
+    """数据下载器"""
+
+    def __init__(self, base_path):
+        self.base_path = base_path
+        self.raw_daily_path = os.path.join(base_path, 'raw_daily')
+        self.back_adjust_path = os.path.join(base_path, 'back_adjust_factors')
+        self.stock_list_path = os.path.join(base_path, 'stock_list')
+        self.trade_calendar_path = os.path.join(base_path, 'trade_datas.csv')
+        self.range_cache_path = os.path.join(base_path, 'stock_date_range.parquet')
+        self.raw_minute_base_path = os.path.join(base_path, 'raw_minute')
+        self.minute_range_cache_path = os.path.join(base_path, 'stock_date_range_minute.parquet')
+        self.dividend_data_path = os.path.join(base_path, 'dividend_data')
+
+        os.makedirs(self.raw_daily_path, exist_ok=True)
+        os.makedirs(self.back_adjust_path, exist_ok=True)
+        os.makedirs(self.stock_list_path, exist_ok=True)
+        os.makedirs(self.dividend_data_path, exist_ok=True)
+
+        self._range_cache = None
+        self._load_range_cache()
+        self._minute_range_cache = {}
+        self._load_minute_range_cache()
+        # [2026-09-01 中间缺口修复] 交易日列表缓存 (用于分钟数据逐交易日缺口检测)
+        self._trade_dates_cache = None
+
+    # ==================== 日线缓存管理 ====================
+    def _load_range_cache(self):
+        if os.path.exists(self.range_cache_path):
+            try:
+                self._range_cache = pd.read_parquet(self.range_cache_path)
+                logger.info(f"加载日期范围缓存: {len(self._range_cache)}条")
+            except:
+                self._range_cache = pd.DataFrame(columns=['code', 'min_date', 'max_date'])
+        else:
+            self._range_cache = pd.DataFrame(columns=['code', 'min_date', 'max_date'])
+
+    def _save_range_cache(self):
+        if self._range_cache is not None:
+            self._range_cache.to_parquet(self.range_cache_path, index=False)
+
+    def _update_range_cache(self, code, min_date, max_date):
+        mask = self._range_cache['code'] == code
+        if mask.any():
+            old_min = self._range_cache.loc[mask, 'min_date'].iloc[0]
+            old_max = self._range_cache.loc[mask, 'max_date'].iloc[0]
+            new_min = min(old_min, min_date)
+            new_max = max(old_max, max_date)
+            self._range_cache.loc[mask, 'min_date'] = new_min
+            self._range_cache.loc[mask, 'max_date'] = new_max
+        else:
+            new_row = pd.DataFrame([[code, min_date, max_date]], columns=['code', 'min_date', 'max_date'])
+            self._range_cache = pd.concat([self._range_cache, new_row], ignore_index=True)
+        self._save_range_cache()
+
+    def get_stock_date_range(self, code):
+        if self._range_cache is None or self._range_cache.empty:
+            return None, None
+        row = self._range_cache[self._range_cache['code'] == code]
+        return (None, None) if row.empty else (row.iloc[0]['min_date'], row.iloc[0]['max_date'])
+
+    # ==================== 分钟线缓存管理 ====================
+    def _load_minute_range_cache(self):
+        if os.path.exists(self.minute_range_cache_path):
+            try:
+                df = pd.read_parquet(self.minute_range_cache_path)
+                # 如果 code 在索引中，重置为列
+                if 'code' not in df.columns and (df.index.name == 'code' or 'code' in df.index.names):
+                    df = df.reset_index()
+
+                if df.empty or 'code' not in df.columns:
+                    logger.info("分钟线日期范围缓存为空或无 code 列，初始化空缓存")
+                    self._minute_range_cache = {freq: pd.DataFrame() for freq in SUPPORTED_MINUTE_FREQ}
+                    return
+
+                for freq in SUPPORTED_MINUTE_FREQ:
+                    min_col, max_col = f'min_date_{freq}', f'max_date_{freq}'
+                    if min_col in df.columns and max_col in df.columns:
+                        mask = df[min_col].notna() | df[max_col].notna()
+                        freq_df = df.loc[mask, ['code', min_col, max_col]].copy()
+                        if not freq_df.empty:
+                            self._minute_range_cache[freq] = freq_df.set_index('code')
+                            logger.info(f"加载 {freq}分钟线缓存: {len(freq_df)} 只股票")
+                        else:
+                            self._minute_range_cache[freq] = pd.DataFrame()
+                    else:
+                        self._minute_range_cache[freq] = pd.DataFrame()
+            except Exception as e:
+                logger.warning(f"加载分钟线缓存失败: {e}")
+                self._minute_range_cache = {freq: pd.DataFrame() for freq in SUPPORTED_MINUTE_FREQ}
+        else:
+            logger.info("分钟线日期范围缓存文件不存在，初始化空缓存")
+            self._minute_range_cache = {freq: pd.DataFrame() for freq in SUPPORTED_MINUTE_FREQ}
+
+    def _save_minute_range_cache(self):
+        if not self._minute_range_cache:
+            return
+        dfs = []
+        for freq in SUPPORTED_MINUTE_FREQ:
+            df = self._minute_range_cache.get(freq)
+            if df is not None and not df.empty:
+                df = df.reset_index()
+                dfs.append(df)
+        if dfs:
+            combined = dfs[0]
+            for df in dfs[1:]:
+                combined = combined.merge(df, on='code', how='outer')
+            if 'code' in combined.columns:
+                combined.to_parquet(self.minute_range_cache_path, index=False)
+                logger.debug(f"分钟线日期范围缓存已保存: {len(combined)} 条")
+
+    def _get_minute_date_range(self, code, freq):
+        cache = self._minute_range_cache.get(freq)
+        if cache is None or cache.empty:
+            return None, None
+        if code not in cache.index:
+            return None, None
+        try:
+            row = cache.loc[code]
+            if isinstance(row, pd.DataFrame):
+                row = row.iloc[0]
+            min_date = row.get(f'min_date_{freq}')
+            max_date = row.get(f'max_date_{freq}')
+            if pd.notna(min_date):
+                min_date = str(min_date)
+            else:
+                min_date = None
+            if pd.notna(max_date):
+                max_date = str(max_date)
+            else:
+                max_date = None
+            return min_date, max_date
+        except Exception as e:
+            logger.debug(f"查询 {code} 的 {freq} 分钟线缓存失败: {e}")
+            return None, None
+
+    def _update_minute_range_cache(self, code, freq, min_date, max_date):
+        if freq not in self._minute_range_cache:
+            self._minute_range_cache[freq] = pd.DataFrame()
+        cache = self._minute_range_cache[freq]
+        if cache.empty:
+            self._minute_range_cache[freq] = pd.DataFrame(
+                columns=[f'min_date_{freq}', f'max_date_{freq}'],
+                index=pd.Index([], name='code')
+            )
+            cache = self._minute_range_cache[freq]
+
+        min_col, max_col = f'min_date_{freq}', f'max_date_{freq}'
+        if code in cache.index:
+            old_min = cache.loc[code, min_col]
+            old_max = cache.loc[code, max_col]
+            new_min = str(min(old_min, min_date)) if pd.notna(old_min) else min_date
+            new_max = str(max(old_max, max_date)) if pd.notna(old_max) else max_date
+            cache.loc[code, min_col] = new_min
+            cache.loc[code, max_col] = new_max
+        else:
+            cache.loc[code] = [min_date, max_date]
+        self._save_minute_range_cache()
+        logger.debug(f"更新 {code} {freq}分钟线缓存: {min_date} ~ {max_date}")
+
+    def _get_raw_minute_path(self, code, freq):
+        safe = code.replace('.', '_')
+        freq_dir = MINUTE_FREQ_MAP.get(freq, f'{freq}min')
+        freq_path = os.path.join(self.raw_minute_base_path, freq_dir)
+        os.makedirs(freq_path, exist_ok=True)
+        return os.path.join(freq_path, f"{safe}.parquet")
+
+    # ==================== 分钟线下载（v3 连接稳定性） ====================
+
+    def _download_minute_segment(self, code, freq, start, end, timeout=120):
+        """
+        下载单段分钟K线，带超时保护。
+        使用 ThreadPoolExecutor 防止 baostock 底层 TCP 永久阻塞。
+        """
+
+        def _download():
+            session = get_baostock_session()
+            # [2026-09-01] 登录失败/冷却中 → 直接跳过 (不查询, 不加剧封禁)
+            if not session.ensure_logged_in():
+                return None, "__LOGIN_FAIL__"
+
+            start_fmt = start if '-' in start else f"{start[:4]}-{start[4:6]}-{start[6:]}"
+            end_fmt = end if '-' in end else f"{end[:4]}-{end[4:6]}-{end[6:]}"
+
+            minute_fields = "date,time,code,open,high,low,close,volume,amount,adjustflag"
+
+            logger.debug(f"  [BaoStock] query({code}, {start_fmt}~{end_fmt}, freq={freq})")
+
+            try:
+                rs = bs.query_history_k_data_plus(
+                    code, minute_fields,
+                    start_date=start_fmt, end_date=end_fmt,
+                    frequency=freq, adjustflag="3"
+                )
+            except (socket.timeout, OSError, ConnectionResetError, BrokenPipeError) as e:
+                return None, f"socket_error_on_query: {type(e).__name__} {e}"
+            except Exception as e:
+                return None, f"query_exception: {type(e).__name__} {e}"
+
+            # 保持原有逻辑：error_code != 0 返回普通错误消息，可被 retry 识别为网络错误
+            if rs.error_code != '0':
+                err_msg = f"baostock_error: {rs.error_code} {rs.error_msg}"
+                logger.debug(f"  [BaoStock] {code} query返回错误: {err_msg}")
+                # [2026-09-01] 会话失效/未登录: 标记为登录失败, 由 retry 层跳过不重试
+                if session.is_login_error(err_msg):
+                    return None, "__LOGIN_FAIL__"
+                return None, err_msg
+
+            data_list = []
+            try:
+                while (rs.error_code == '0') & rs.next():
+                    data_list.append(rs.get_row_data())
+            except (socket.timeout, OSError, ConnectionResetError, BrokenPipeError) as e:
+                if data_list:
+                    logger.warning(f"  [{code}] 读取行时socket异常，已获取 {len(data_list)} 行，返回部分数据")
+                else:
+                    return None, f"socket_error_on_read: {type(e).__name__} {e}"
+            except Exception as e:
+                if data_list:
+                    logger.warning(f"  [{code}] 读取行时异常，已获取 {len(data_list)} 行，返回部分数据")
+                else:
+                    return None, f"read_exception: {type(e).__name__} {e}"
+
+            # ========== 修改：无数据标记为不可重试（退市/停牌） ==========
+            if not data_list:
+                return None, "__EMPTY__"
+
+            logger.debug(f"  [BaoStock] {code} {start_fmt}~{end_fmt} 获取 {len(data_list)} 行")
+
+            df = pd.DataFrame(data_list,
+                              columns=["date", "time", "code", "open", "high", "low", "close", "volume", "amount",
+                                       "adjustflag"])
+            for col in ['open', 'high', 'low', 'close', 'volume', 'amount']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            # 向量化时间解析
+            trade_time, trade_date = _parse_minute_time_vectorized(df['date'], df['time'])
+            df['trade_time'] = trade_time
+            df['trade_date'] = trade_date
+            df['ts_code'] = code
+
+            df = df.dropna(subset=['trade_time'])
+            # ========== 修改：解析后为空同样不可重试 ==========
+            if df.empty:
+                return None, "__EMPTY__"
+
+            return df[['trade_time', 'trade_date', 'ts_code', 'open', 'high', 'low', 'close', 'volume', 'amount']], None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_download)
+            try:
+                return future.result(timeout=timeout)
+            except concurrent.futures.TimeoutError:
+                logger.warning(f"  [{code}] 分段下载超时 ({timeout}s)")
+                return None, "timeout"
+            except Exception as e:
+                return None, f"executor_exception: {type(e).__name__} {e}"
+
+    def _download_minute_with_retry(self, code, freq, start, end, max_retries=5, timeout=120):
+        """
+        带重试+重连的分钟线下载。
+
+        不可重试的错误：
+        - __EMPTY__：退市/停牌导致的无数据，直接返回不重试
+        - __LOGIN_FAIL__：[2026-09-01] 登录失败/会话失效/冷却中, 直接跳过不重试
+          (重试只会加剧封禁)
+        """
+        session = get_baostock_session()
+
+        for attempt in range(max_retries):
+            df, err = self._download_minute_segment(code, freq, start, end, timeout=timeout)
+            if err is None:
+                session.report_success()
+                return df, None
+
+            # ========== 新增：无数据直接返回，不重试 ==========
+            if err == "__EMPTY__":
+                logger.debug(f"  [{code}] {start}~{end} 无数据（退市/停牌），跳过")
+                return None, "__EMPTY__"
+
+            # ========== [2026-09-01] 登录失败/会话失效: 不重试, 尝试重登一次 ==========
+            if err == "__LOGIN_FAIL__":
+                # 若在冷却期, login 内部直接返回 False (不加剧封禁); 若不在冷却期,
+                # 尝试强制重登一次; 无论结果如何本段都跳过 (交给外层继续后续股票)
+                logger.warning(f"  [{code}] 登录失败/会话失效 → 尝试重登后跳过本段")
+                if session.login(force=True):
+                    # 重登成功: 再试一次本段 (单次额外机会, 不进入死循环)
+                    df, err2 = self._download_minute_segment(code, freq, start, end, timeout=timeout)
+                    if err2 is None:
+                        session.report_success()
+                        return df, None
+                    if err2 == "__EMPTY__":
+                        return None, "__EMPTY__"
+                    if err2 == "__LOGIN_FAIL__":
+                        return None, "__LOGIN_FAIL__"
+                    # 其他错误: 继续常规重试逻辑
+                    err = err2
+                else:
+                    return None, "__LOGIN_FAIL__"
+
+            wait_time = session.report_error(err)
+            logger.warning(
+                f"  [{code}] 第 {attempt + 1}/{max_retries} 次失败: {err}，"
+                f"等待 {wait_time:.0f}s 后重试"
+            )
+            time.sleep(wait_time)
+
+        return None, f"failed_after_{max_retries}_retries"
+
+    def save_raw_minute(self, code, freq, df):
+        """保存原始分钟线数据，支持增量合并"""
+        file_path = self._get_raw_minute_path(code, freq)
+        df['trade_time'] = pd.to_datetime(df['trade_time'])
+        df['trade_date'] = pd.to_datetime(df['trade_date'])
+
+        if os.path.exists(file_path):
+            existing = pd.read_parquet(file_path)
+            existing['trade_time'] = pd.to_datetime(existing['trade_time'])
+            existing['trade_date'] = pd.to_datetime(existing['trade_date'])
+            combined = pd.concat([existing, df], ignore_index=True)
+            combined = combined.drop_duplicates(subset=['trade_time'], keep='last')
+            df = combined.sort_values('trade_time').reset_index(drop=True)
+
+        df.to_parquet(file_path, index=False, compression='snappy')
+
+        if not df.empty:
+            min_date = df['trade_date'].min().strftime('%Y%m%d')
+            max_date = df['trade_date'].max().strftime('%Y%m%d')
+            self._update_minute_range_cache(code, freq, min_date, max_date)
+
+    # ==================== 分钟线中间缺口检测 (2026-09-01 修复) ====================
+
+    def _get_trade_dates(self, start_dt, end_dt):
+        """获取 [start_dt, end_dt] 内的交易日列表 (datetime.date)。
+        优先从本地的 trade_datas.csv 加载; 失败时回退用工作日近似。
+        结果缓存到实例, 避免每只股票重复读 CSV。
+        """
+        if self._trade_dates_cache is None:
+            dates = set()
+            if os.path.exists(self.trade_calendar_path):
+                try:
+                    cal = pd.read_csv(self.trade_calendar_path, encoding='utf-8-sig')
+                    if 'calendar_date' in cal.columns and 'is_trading_day' in cal.columns:
+                        cal = cal[cal['is_trading_day'].astype(int) == 1]
+                        dates = set(pd.to_datetime(cal['calendar_date']).dt.date)
+                except Exception as e:
+                    logger.warning(f"加载交易日历失败, 使用工作日近似: {e}")
+            self._trade_dates_cache = dates
+        if not self._trade_dates_cache:
+            # 回退: 周一到周五近似 (准确性低于交易日历, 仅兜底)
+            out = []
+            cur = start_dt.date()
+            while cur <= end_dt.date():
+                if cur.weekday() < 5:
+                    out.append(cur)
+                cur += timedelta(days=1)
+            return out
+        return sorted(d for d in self._trade_dates_cache if start_dt.date() <= d <= end_dt.date())
+
+    @staticmethod
+    def _merge_gap_intervals(intervals):
+        """合并重叠/相邻的缺口区间 [(s1,e1),(s2,e2)...] → 排序后合并去重。
+
+        前段/后段/中间缺口检测可能对同一日期段重复标记 (如头部缺口 2022-08-01~2024-01-01
+        同时会被中间缺口检测再发现一次), 下载前统一合并, 避免重复下载。
+        """
+        if not intervals:
+            return []
+        intervals = sorted(intervals, key=lambda x: x[0])
+        merged = [list(intervals[0])]
+        for s, e in intervals[1:]:
+            if s <= merged[-1][1] + timedelta(days=1):
+                merged[-1][1] = max(merged[-1][1], e)
+            else:
+                merged.append([s, e])
+        return [(s, e) for s, e in merged]
+
+    def _find_minute_middle_gaps(self, code, freq, start_dt, end_dt):
+        """检测分钟数据在 [start_dt, end_dt] 内的【中间缺口】。
+
+        与头部/尾部缺口不同, 中间缺口是“缓存 min/max 都覆盖区间, 但中间缺了
+        某些交易日”的情况 (如分钟文件 2022-08-01 ~ 2026-08-31 齐全, 但中间
+        08-03/08-04 两天的 bar 缺失)。原逻辑只算前段/后段间隙, 永远发现不了
+        这类缺口 → 数据永不补齐。
+
+        返回: [(gap_start_dt, gap_end_dt), ...] 连续缺口段 (datetime 对象, 闭区间)。
+        """
+        fpath = self._get_raw_minute_path(code, freq)
+        if not os.path.exists(fpath):
+            return []  # 无文件时走前段全量逻辑, 此处无需处理
+
+        # 读取该股票现有分钟数据的交易日集合 (只读 trade_date 列, 快)
+        try:
+            df = pd.read_parquet(fpath, columns=['trade_date'])
+            have_days = set(pd.to_datetime(df['trade_date']).dt.date)
+        except Exception as e:
+            logger.debug(f"  [{code}] 读取分钟文件失败, 跳过中间缺口检测: {e}")
+            return []
+
+        # 目标区间内的所有交易日
+        trade_days = self._get_trade_dates(start_dt, end_dt)
+        if not trade_days:
+            return []
+
+        # 找出缺失的交易日
+        missing = sorted(d for d in trade_days if d not in have_days)
+        if not missing:
+            return []
+
+        # 聚合连续的缺失交易日 → 缺口段
+        gaps = []
+        seg_start = seg_end = missing[0]
+        for d in missing[1:]:
+            if (d - seg_end).days == 1:
+                seg_end = d
+            else:
+                gaps.append((seg_start, seg_end))
+                seg_start = seg_end = d
+        gaps.append((seg_start, seg_end))
+
+        logger.info(f"  [{code}] 检测到中间缺口 {len(gaps)} 段: "
+                    + ', '.join(f"{s}~{e}" for s, e in gaps)
+                    + f" (现有数据 {len(have_days & set(trade_days))}/{len(trade_days)} 交易日)")
+        return [(datetime.combine(s, datetime.min.time()), datetime.combine(e, datetime.min.time()))
+                for s, e in gaps]
+
+    def update_all_raw_minute(
+            self,
+            freq: str,
+            target_start_date: str = None,
+            target_end_date: str = None,
+            stock_codes: Optional[List[str]] = None
+    ):
+        """
+        增量更新所有股票的原始分钟线
+
+        智能下载策略：
+        - 不指定 target_start_date：从缓存末尾继续增量下载（首次则从2020-01-01开始）
+        - 指定 target_start_date：对比缓存范围，只下载缓存未覆盖的部分（增量追加）
+        """
+        if target_end_date is None:
+            target_end_date = datetime.now().strftime('%Y-%m-%d')
+        else:
+            if len(target_end_date) == 8:
+                target_end_date = f"{target_end_date[:4]}-{target_end_date[4:6]}-{target_end_date[6:]}"
+
+        user_specified_start = target_start_date is not None
+        if user_specified_start:
+            if len(target_start_date) == 8:
+                target_start_date = f"{target_start_date[:4]}-{target_start_date[4:6]}-{target_start_date[6:]}"
+            target_start_dt = datetime.strptime(target_start_date, '%Y-%m-%d')
+        else:
+            target_start_dt = None
+
+        freq_name = MINUTE_FREQ_MAP.get(freq, f'{freq}min')
+
+        logger.info("=" * 60)
+        logger.info(f"开始增量更新{freq_name}线")
+
+        for f in SUPPORTED_MINUTE_FREQ:
+            cache = self._minute_range_cache.get(f, pd.DataFrame())
+            logger.info(f"{f}分钟线缓存: {len(cache)} 只股票")
+
+        if user_specified_start:
+            logger.info(f"指定日期范围: {target_start_date} ~ {target_end_date}")
+            logger.info(f"智能下载：仅下载缓存未覆盖的部分")
+        else:
+            logger.info(f"自动模式：从缓存末尾继续增量下载")
+            logger.info(f"目标结束日期: {target_end_date}")
+        logger.info("=" * 60)
+
+        if stock_codes is None:
+            logger.info("正在加载股票列表...")
+            stock_df = self.download_stock_list()
+            stock_codes = stock_df['code'].tolist()
+
+        total = len(stock_codes)
+        logger.info(f"共有 {total} 只股票需要检查")
+        logger.info("=" * 60)
+
+        target_end_dt = datetime.strptime(target_end_date, '%Y-%m-%d')
+        success_count = 0
+        skip_count = 0
+        empty_count = 0  # 退市/停牌无数据
+        fail_count = 0
+        failed_codes = []
+        start_time = time.time()
+
+        # 分钟线分段大小：30天
+        MAX_SEGMENT_DAYS = 30
+
+        # 初始登录
+        get_baostock_session().login()
+
+        for i, code in enumerate(stock_codes):
+            current_num = i + 1
+            elapsed = time.time() - start_time
+
+            cached_min, cached_max = self._get_minute_date_range(code, freq)
+            cached_min_dt = datetime.strptime(cached_min, '%Y%m%d') if cached_min else None
+            cached_max_dt = datetime.strptime(cached_max, '%Y%m%d') if cached_max else None
+
+            # 计算需要下载的时间间隙
+            gaps = []  # list of (start_dt, end_dt) datetime pairs
+            gap_strs = []  # list of (start_str, end_str) for logging
+
+            if user_specified_start:
+                # [2026-09-01 修复] 无论有无缓存都先做中间缺口检测, 拆成独立 gap:
+                #   - 无缓存整区间下载时, 若头部空段(次新股上市晚)触发连续空段 break,
+                #     中间缺口必须独立成 gap 才能避免被连带跳过
+                #   - 有缓存时与前段/后段缺口合并去重 (见下方 merge)
+                try:
+                    mid_gaps = self._find_minute_middle_gaps(code, freq, target_start_dt, target_end_dt)
+                except Exception as e:
+                    mid_gaps = []
+                    logger.warning(f"  [{code}] 中间缺口检测异常: {e}")
+
+                if cached_min_dt is None:
+                    # 无缓存 (缓存表缺失)。若文件存在, 基于文件实际范围构造头/尾/中间缺口;
+                    #   文件不存在 → 整区间一个 gap。
+                    fmin_dt = fmax_dt = None
+                    fpath = self._get_raw_minute_path(code, freq)
+                    if os.path.exists(fpath):
+                        try:
+                            _fdf = pd.read_parquet(fpath, columns=['trade_date'])
+                            _fd = pd.to_datetime(_fdf['trade_date'])
+                            if len(_fd):
+                                fmin_dt = _fd.min().to_pydatetime().replace(tzinfo=None)
+                                fmax_dt = _fd.max().to_pydatetime().replace(tzinfo=None)
+                        except Exception as e:
+                            logger.debug(f"  [{code}] 读取分钟文件范围失败: {e}")
+
+                    if fmin_dt is None:
+                        gaps.append((target_start_dt, target_end_dt))
+                        gap_strs.append((target_start_date, target_end_date))
+                    else:
+                        if fmin_dt > target_start_dt:
+                            head_end_dt = min(fmin_dt - timedelta(days=1), target_end_dt)
+                            if head_end_dt >= target_start_dt:
+                                gaps.append((target_start_dt, head_end_dt))
+                                gap_strs.append((target_start_date, head_end_dt.strftime('%Y-%m-%d')))
+                        if fmax_dt is not None and fmax_dt < target_end_dt:
+                            tail_start_dt = max(fmax_dt + timedelta(days=1), target_start_dt)
+                            if tail_start_dt <= target_end_dt:
+                                gaps.append((tail_start_dt, target_end_dt))
+                                gap_strs.append((tail_start_dt.strftime('%Y-%m-%d'), target_end_date))
+                        for mg_s, mg_e in mid_gaps:
+                            gaps.append((mg_s, mg_e))
+                            gap_strs.append((mg_s.strftime('%Y-%m-%d'), mg_e.strftime('%Y-%m-%d')))
+                else:
+                    # 前段间隙: [D1, min(D3-1, D2)]
+                    if cached_min_dt > target_start_dt:
+                        head_end_dt = min(cached_min_dt - timedelta(days=1), target_end_dt)
+                        if head_end_dt >= target_start_dt:
+                            gaps.append((target_start_dt, head_end_dt))
+                            gap_strs.append((target_start_date, head_end_dt.strftime('%Y-%m-%d')))
+                    # 后段间隙: [max(D4+1, D1), D2]
+                    if cached_max_dt is not None and cached_max_dt < target_end_dt:
+                        tail_start_dt = max(cached_max_dt + timedelta(days=1), target_start_dt)
+                        if tail_start_dt <= target_end_dt:
+                            gaps.append((tail_start_dt, target_end_dt))
+                            gap_strs.append((tail_start_dt.strftime('%Y-%m-%d'), target_end_date))
+                    # [2026-09-01 修复] 中间缺口: 缓存 min/max 覆盖区间, 但中间缺了交易日
+                    #   (如 2022-08-01~2026-08-31 齐全但 08-03/08-04 缺 bar)。
+                    #   原逻辑只算前/后段间隙 → 此类缺口永不补齐。
+                    for mg_s, mg_e in mid_gaps:
+                        gaps.append((mg_s, mg_e))
+                        gap_strs.append((mg_s.strftime('%Y-%m-%d'), mg_e.strftime('%Y-%m-%d')))
+            else:
+                # 自动模式：仅补尾部（保持原逻辑）
+                if cached_max_dt is not None:
+                    if cached_max_dt >= target_end_dt:
+                        skip_count += 1
+                        avg_time = elapsed / current_num if current_num > 0 else 0
+                        remaining = avg_time * (total - current_num)
+                        logger.info(f"[{current_num}/{total}] {code} : 缓存已覆盖, 跳过 | "
+                                    f"成功:{success_count} 跳过:{skip_count+empty_count} 失败:{fail_count} | "
+                                    f"预计剩余:{remaining / 60:.1f}分")
+                        continue
+                    tail_start_dt = cached_max_dt + timedelta(days=1)
+                    if tail_start_dt <= target_end_dt:
+                        gaps.append((tail_start_dt, target_end_dt))
+                        gap_strs.append((tail_start_dt.strftime('%Y-%m-%d'), target_end_date))
+                else:
+                    # baostock分钟线最早数据：2020-01-03
+                    default_minute_start = datetime(2020, 1, 3)
+                    gaps.append((default_minute_start, target_end_dt))
+                    gap_strs.append(('2020-01-03', target_end_date))
+
+            # [2026-09-01 中间缺口修复] 前段/后段/中间缺口可能重叠 (如头部缺口同时被
+            # 中间缺口检测再次发现), 合并去重后再判断是否跳过 / 生成分段。
+            if len(gaps) > 1:
+                gaps = self._merge_gap_intervals(gaps)
+                gap_strs = [(s.strftime('%Y-%m-%d'), e.strftime('%Y-%m-%d')) for s, e in gaps]
+
+            if not gaps:
+                skip_count += 1
+                avg_time = elapsed / current_num if current_num > 0 else 0
+                remaining = avg_time * (total - current_num)
+                logger.info(f"[{current_num}/{total}] {code} : 缓存已覆盖, 跳过 | "
+                            f"成功:{success_count} 跳过:{skip_count+empty_count} 失败:{fail_count} | "
+                            f"预计剩余:{remaining / 60:.1f}分")
+                continue
+
+            # 从所有间隙生成下载分段（每段30天），按 gap 分组
+            # [2026-09-01 中间缺口修复] 原实现把全部 gap 的分段平铺成一个列表,
+            #   连续空段 break 会跳出【全部】分段 → 头部缺口前几段为空(次新股上市晚/
+            #   退市)时, 后续的中间缺口/尾部缺口被连带跳过。现按 gap 分组,
+            #   连续空段跳过只作用于当前 gap。
+            gap_desc = ', '.join(f"{s}~{e}" for s, e in gap_strs)
+            gap_segments = []  # list[list[(start_str, end_str)]], 每个 gap 一组
+            for gap_s_dt, gap_e_dt in gaps:
+                segs = []
+                seg_start_dt = gap_s_dt
+                while seg_start_dt < gap_e_dt:
+                    seg_end_dt = min(seg_start_dt + timedelta(days=MAX_SEGMENT_DAYS), gap_e_dt)
+                    segs.append((
+                        seg_start_dt.strftime('%Y-%m-%d'),
+                        seg_end_dt.strftime('%Y-%m-%d')
+                    ))
+                    seg_start_dt = seg_end_dt + timedelta(days=1)
+                if segs:
+                    gap_segments.append(segs)
+
+            df_all = []
+            stock_success = True
+            stock_empty = False  # 退市/停牌标记
+            seg_fail_reason = None
+            MAX_CONSECUTIVE_EMPTY = 3  # 连续3段空则跳过当前gap剩余分段
+            abort_all = False  # 网络级失败 → 终止该股票所有剩余 gap
+            all_gaps_empty = True  # [2026-09-01] 所有 gap 都无数据 → 退市/停牌
+
+            for gi, segs in enumerate(gap_segments):
+                consecutive_empty = 0  # 每个 gap 独立计数
+                gap_has_data = False  # 当前 gap 是否下载到数据
+                for seg_idx, (seg_start, seg_end) in enumerate(segs):
+                    df_seg, err = self._download_minute_with_retry(
+                        code, freq, seg_start, seg_end,
+                        max_retries=5, timeout=120
+                    )
+
+                    if err == "__EMPTY__":
+                        consecutive_empty += 1
+                        if consecutive_empty >= MAX_CONSECUTIVE_EMPTY:
+                            # 连续多段无数据，只跳过当前 gap 剩余分段
+                            # baostock分钟线数据最早2020-01-03，早于此日期的分段返回空
+                            logger.debug(f"  [{code}] gap{gi} 连续 {consecutive_empty} 段无数据，跳过该 gap 剩余分段")
+                            break
+                        # 未达连续阈值，继续下一段
+                        continue
+
+                    if err == "__LOGIN_FAIL__":
+                        # [2026-09-01] 登录失败/会话失效/冷却中 → 跳过该股票剩余 gap,
+                        #   继续后续股票 (不 abort 整个下载)。外层已处理冷却+重登。
+                        logger.warning(f"  [{code}] 登录失败/冷却中 → 跳过该股票 (继续后续)")
+                        stock_success = False
+                        seg_fail_reason = "login_failed_skip"
+                        break
+
+                    if err is not None:
+                        logger.warning(f"  [{code}] 分段 {seg_start}~{seg_end} 最终失败: {err}")
+                        stock_success = False
+                        seg_fail_reason = err
+                        abort_all = True
+                        break
+
+                    # 有数据，重置连续空计数
+                    consecutive_empty = 0
+                    gap_has_data = True
+
+                    if df_seg is not None and not df_seg.empty:
+                        df_all.append(df_seg)
+
+                    time.sleep(0.3)
+
+                if gap_has_data:
+                    all_gaps_empty = False
+                if abort_all:
+                    break
+
+            # 所有分段处理完毕后，判断是否有数据
+            if not df_all and stock_success and all_gaps_empty:
+                stock_empty = True
+
+            # 保存结果 - 单行日志
+            avg_time = elapsed / current_num if current_num > 0 else 0
+            remaining = avg_time * (total - current_num)
+
+            if stock_empty:
+                # 退市/停牌导致无数据，不计入失败
+                empty_count += 1
+                logger.info(f"[{current_num}/{total}] {code} : 无数据(退市/停牌), 跳过 | "
+                            f"成功:{success_count} 跳过:{skip_count+empty_count} 失败:{fail_count} | "
+                            f"预计剩余:{remaining / 60:.1f}分")
+            elif df_all and stock_success:
+                df_combined = pd.concat(df_all, ignore_index=True)
+                total_rows = len(df_combined)
+                self.save_raw_minute(code, freq, df_combined)
+                success_count += 1
+                logger.info(f"[{current_num}/{total}] {code} : 下载 {gap_desc}, "
+                            f"成功:{total_rows}条 | "
+                            f"成功:{success_count} 跳过:{skip_count+empty_count} 失败:{fail_count} | "
+                            f"预计剩余:{remaining / 60:.1f}分")
+            elif df_all and not stock_success:
+                df_combined = pd.concat(df_all, ignore_index=True)
+                self.save_raw_minute(code, freq, df_combined)
+                fail_count += 1
+                failed_codes.append((code, f"partial_fail: {seg_fail_reason}"))
+                logger.warning(f"[{current_num}/{total}] {code} : 下载 {gap_desc}, "
+                               f"部分成功({len(df_combined)}条) | "
+                               f"成功:{success_count} 跳过:{skip_count+empty_count} 失败:{fail_count} | "
+                               f"预计剩余:{remaining / 60:.1f}分")
+            else:
+                fail_count += 1
+                failed_codes.append((code, seg_fail_reason or "no_data"))
+                logger.warning(f"[{current_num}/{total}] {code} : 下载 {gap_desc}, "
+                               f"失败:无数据 | "
+                               f"成功:{success_count} 跳过:{skip_count+empty_count} 失败:{fail_count} | "
+                               f"预计剩余:{remaining / 60:.1f}分")
+
+            time.sleep(0.5)
+
+        elapsed = time.time() - start_time
+        logger.info("=" * 60)
+        logger.info(f"{freq_name}线更新完成！")
+        logger.info(f"总计: {total} 只")
+        logger.info(f"成功(新增数据): {success_count} 只")
+        logger.info(f"跳过(缓存已覆盖): {skip_count} 只")
+        logger.info(f"无数据(退市/停牌): {empty_count} 只")
+        logger.info(f"失败: {fail_count} 只")
+        if user_specified_start:
+            logger.info(f"指定日期范围: {target_start_date} ~ {target_end_date}")
+        logger.info(f"总耗时: {elapsed / 60:.1f} 分钟 ({elapsed / 3600:.1f} 小时)")
+        if total > 0:
+            logger.info(f"平均每只: {elapsed / total:.1f} 秒")
+
+        if failed_codes:
+            logger.info(f"失败股票列表 ({len(failed_codes)} 只):")
+            for fc_code, fc_reason in failed_codes[:50]:
+                logger.info(f"  {fc_code}: {fc_reason}")
+            if len(failed_codes) > 50:
+                logger.info(f"  ... 还有 {len(failed_codes) - 50} 只，详见日志")
+        logger.info("=" * 60)
+
+    # ==================== 日线相关方法 ====================
+    def download_trade_calendar(self, start_date='2018-01-01', end_date=None):
+        if end_date is None:
+            end_date = (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
+        session = get_baostock_session()
+        session.ensure_logged_in()
+        logger.info(f"下载交易日历: {start_date} 至 {end_date}")
+        try:
+            rs = bs.query_trade_dates(start_date=start_date, end_date=end_date)
+        except (socket.timeout, OSError) as e:
+            logger.warning(f"下载交易日历网络异常: {e}，重连后重试")
+            session.login(force=True)
+            rs = bs.query_trade_dates(start_date=start_date, end_date=end_date)
+        if rs.error_code != '0':
+            raise ValueError(f"获取交易日历失败: {rs.error_msg}")
+        data_list = []
+        while (rs.error_code == '0') & rs.next():
+            data_list.append(rs.get_row_data())
+        df = pd.DataFrame(data_list, columns=rs.fields)
+        df['calendar_date'] = pd.to_datetime(df['calendar_date'])
+        df['is_trading_day'] = pd.to_numeric(df['is_trading_day'])
+        df.to_csv(self.trade_calendar_path, index=False, encoding='utf-8-sig')
+        logger.info(f"交易日历已保存: {len(df)}条")
+        return df
+
+    def download_stock_list(self, force_update=False):
+        stock_list_file = os.path.join(self.stock_list_path, 'historical_stocks.parquet')
+        if os.path.exists(stock_list_file) and not force_update:
+            df = pd.read_parquet(stock_list_file)
+            logger.info(f"从本地加载股票列表: {len(df)}只")
+            return df
+
+        logger.info("从Baostock获取完整历史股票列表...")
+        session = get_baostock_session()
+        session.ensure_logged_in()
+
+        cal_df = self.download_trade_calendar()
+        cal_df = cal_df[cal_df['calendar_date'] >= '2010-01-01']
+        cal_df['year_quarter'] = cal_df['calendar_date'].dt.to_period('Q')
+        first_days = cal_df.groupby('year_quarter')['calendar_date'].first().tolist()
+        query_dates = sorted(first_days)
+
+        all_codes = {}
+        for query_date in query_dates:
+            date_str = query_date.strftime('%Y-%m-%d')
+            try:
+                rs = bs.query_all_stock(day=date_str)
+                if rs.error_code != '0':
+                    continue
+                while (rs.error_code == '0') & rs.next():
+                    row = rs.get_row_data()
+                    code = row[0].lower()
+                    name = row[1]
+                    all_codes[code] = name
+            except Exception as e:
+                logger.warning(f"查询 {date_str} 异常: {e}")
+            time.sleep(0.1)
+
+        if not all_codes:
+            raise ValueError("未能获取任何历史股票数据")
+
+        result = pd.DataFrame(list(all_codes.items()), columns=['code', 'code_name'])
+        result = result[result['code'].str.startswith(VALID_STOCK_PREFIXES)]
+        result.to_parquet(stock_list_file, index=False)
+        logger.info(f"历史股票列表已保存: {len(result)}只")
+        return result
+
+    def download_raw_daily(self, code, start_date, end_date, max_retries=3):
+        session = get_baostock_session()
+        start_fmt = start_date if '-' in start_date else f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]}"
+        end_fmt = end_date if '-' in end_date else f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]}"
+        raw_fields = "date,code,open,high,low,close,preclose,volume,amount,turn,tradestatus,pctChg,isST"
+
+        # [2026-09-01] 登录失败/冷却中 → 直接跳过该股票 (不查询, 不加剧封禁)
+        if not session.ensure_logged_in():
+            logger.warning(f"  [{code}] 登录失败/冷却中 → 跳过该股票")
+            return None
+
+        for attempt in range(max_retries):
+            try:
+                session.ensure_logged_in()
+                rs = bs.query_history_k_data_plus(
+                    code, raw_fields,
+                    start_date=start_fmt, end_date=end_fmt,
+                    frequency="d", adjustflag="3"
+                )
+                if rs.error_code != '0':
+                    err_msg = f"{rs.error_code} {rs.error_msg}"
+                    logger.warning(f"下载 [{code}] 错误: {rs.error_msg} (尝试 {attempt + 1}/{max_retries})")
+                    if session.is_login_error(err_msg):
+                        # [2026-09-01] 会话失效/未登录: 强制重登一次; 重登失败(冷却/封禁)
+                        #   → 跳过该股票, 不再重试查询 (避免空转 + 加剧封禁)。
+                        if session.login(force=True):
+                            time.sleep(2 ** attempt)
+                            continue
+                        logger.warning(f"  [{code}] 会话失效且重登失败 → 跳过该股票")
+                        return None
+                    # 其他业务错误: 累积连续错误 (report_error 内部触发冷却+重登兜底)
+                    session.report_error(err_msg)
+                    time.sleep(2 ** attempt)
+                    continue
+                data_list = []
+                while (rs.error_code == '0') & rs.next():
+                    data_list.append(rs.get_row_data())
+                if not data_list:
+                    logger.debug(f"下载 [{code}] 返回空数据 (尝试 {attempt + 1}/{max_retries})")
+                    time.sleep(2 ** attempt)
+                    continue
+                df_raw = pd.DataFrame(data_list, columns=rs.fields)
+                numeric_cols = ['open', 'high', 'low', 'close', 'preclose', 'volume', 'amount', 'turn', 'pctChg']
+                for col in numeric_cols:
+                    if col in df_raw.columns:
+                        df_raw[col] = pd.to_numeric(df_raw[col], errors='coerce')
+                df_raw['trade_date'] = pd.to_datetime(df_raw['date'])
+                df_raw['ts_code'] = code
+                session.update_activity()
+                session.report_success()
+                return df_raw
+            except (socket.timeout, OSError, ConnectionResetError, BrokenPipeError) as e:
+                logger.warning(f"下载 [{code}] socket异常 (尝试 {attempt + 1}/{max_retries}): {e}")
+                session.report_error(f"socket: {e}")
+                time.sleep(2 ** attempt)
+            except Exception as e:
+                logger.warning(f"下载 [{code}] 异常 (尝试 {attempt + 1}/{max_retries}): {e}")
+                time.sleep(2 ** attempt)
+
+        logger.error(f"下载 [{code}] 失败，已重试 {max_retries} 次")
+        return None
+
+    def download_back_adjust(self, code, start_date='1990-01-01', end_date=None):
+        if end_date is None:
+            end_date = datetime.now().strftime('%Y-%m-%d')
+        session = get_baostock_session()
+        session.ensure_logged_in()
+        try:
+            rs = bs.query_adjust_factor(code=code, start_date=start_date, end_date=end_date)
+        except (socket.timeout, OSError, ConnectionResetError, BrokenPipeError) as e:
+            session.login(force=True)
+            rs = bs.query_adjust_factor(code=code, start_date=start_date, end_date=end_date)
+        if rs.error_code != '0':
+            logger.warning(f"下载 {code} 复权因子失败: {rs.error_msg}")
+            return None
+        df = rs.get_data()
+        if df.empty:
+            return None
+        df['dividOperateDate'] = pd.to_datetime(df['dividOperateDate'])
+        if 'backAdjustFactor' in df.columns:
+            df['backAdjustFactor'] = pd.to_numeric(df['backAdjustFactor'], errors='coerce')
+        return df.sort_values('dividOperateDate').reset_index(drop=True)
+
+    def save_raw_daily(self, code, df):
+        safe = code.replace('.', '_')
+        file_path = os.path.join(self.raw_daily_path, f"{safe}.parquet")
+        df['trade_date'] = pd.to_datetime(df['trade_date'])
+        if os.path.exists(file_path):
+            existing = pd.read_parquet(file_path)
+            existing['trade_date'] = pd.to_datetime(existing['trade_date'])
+            combined = pd.concat([existing, df], ignore_index=True)
+            combined = combined.drop_duplicates(subset=['trade_date'], keep='last')
+            df = combined.sort_values('trade_date').reset_index(drop=True)
+        df.to_parquet(file_path, index=False, compression='snappy')
+        min_date = df['trade_date'].min().strftime('%Y%m%d')
+        max_date = df['trade_date'].max().strftime('%Y%m%d')
+        self._update_range_cache(code, min_date, max_date)
+
+    def save_back_adjust(self, code, df):
+        safe = code.replace('.', '_')
+        file_path = os.path.join(self.back_adjust_path, f"{safe}_back_adjust.parquet")
+        df['dividOperateDate'] = pd.to_datetime(df['dividOperateDate'])
+        if os.path.exists(file_path):
+            existing = pd.read_parquet(file_path)
+            existing['dividOperateDate'] = pd.to_datetime(existing['dividOperateDate'])
+            combined = pd.concat([existing, df], ignore_index=True)
+            combined = combined.drop_duplicates(subset=['dividOperateDate'], keep='last')
+            df = combined.sort_values('dividOperateDate').reset_index(drop=True)
+        df.to_parquet(file_path, index=False, compression='snappy')
+
+    # ==================== 日线中间缺口检测 (2026-09-01, 与分钟线同构) ====================
+
+    def _find_daily_middle_gaps(self, code, start_dt, end_dt):
+        """检测日线数据在 [start_dt, end_dt] 内的【中间缺口】。
+
+        与分钟线 _find_minute_middle_gaps 语义一致: 缓存 min/max 覆盖区间, 但中间
+        缺了某些交易日 (如磁盘写入中断/手工改动导致部分日期缺失)。原 update_all_raw_daily
+        只算前段/后段间隙, 此类缺口永不补齐。
+
+        注意: 日线下载是整段一次性拉取, 正常流程不会产生中间缺口; 本检测为防御性
+        (历史坏文件/外部改动), 与分钟线共用 _get_trade_dates 交易日历。
+
+        返回: [(gap_start_dt, gap_end_dt), ...] 连续缺口段 (datetime 对象, 闭区间)。
+        """
+        fpath = os.path.join(self.raw_daily_path, f"{code.replace('.', '_')}.parquet")
+        if not os.path.exists(fpath):
+            return []
+
+        try:
+            df = pd.read_parquet(fpath, columns=['trade_date'])
+            have_days = set(pd.to_datetime(df['trade_date']).dt.date)
+        except Exception as e:
+            logger.debug(f"  [{code}] 读取日线文件失败, 跳过中间缺口检测: {e}")
+            return []
+        if not have_days:
+            return []
+
+        trade_days = self._get_trade_dates(start_dt, end_dt)
+        if not trade_days:
+            return []
+
+        missing = sorted(d for d in trade_days if d not in have_days)
+        if not missing:
+            return []
+
+        gaps = []
+        seg_start = seg_end = missing[0]
+        for d in missing[1:]:
+            if (d - seg_end).days == 1:
+                seg_end = d
+            else:
+                gaps.append((seg_start, seg_end))
+                seg_start = seg_end = d
+        gaps.append((seg_start, seg_end))
+
+        logger.info(f"  [{code}] 日线中间缺口 {len(gaps)} 段: "
+                    + ', '.join(f"{s}~{e}" for s, e in gaps))
+        return [(datetime.combine(s, datetime.min.time()), datetime.combine(e, datetime.min.time()))
+                for s, e in gaps]
+
+    def update_all_raw_daily(self, target_end_date=None, target_start_date=None):
+        if target_end_date is None:
+            target_end_date = datetime.now().strftime('%Y-%m-%d')
+        elif len(target_end_date) == 8:
+            target_end_date = f"{target_end_date[:4]}-{target_end_date[4:6]}-{target_end_date[6:]}"
+
+        user_specified_start = target_start_date is not None
+        if user_specified_start:
+            if len(target_start_date) == 8:
+                target_start_date = f"{target_start_date[:4]}-{target_start_date[4:6]}-{target_start_date[6:]}"
+            target_start_dt = datetime.strptime(target_start_date, '%Y-%m-%d')
+
+        logger.info("=" * 60)
+        if user_specified_start:
+            logger.info(f"开始增量更新原始日线，目标区间: {target_start_date} ~ {target_end_date}")
+            logger.info("智能下载：自动补齐缓存未覆盖的头尾间隙")
+        else:
+            logger.info(f"开始增量更新原始日线，目标结束日期: {target_end_date}")
+        logger.info("=" * 60)
+
+        stock_df = self.download_stock_list()
+        codes = stock_df['code'].tolist()
+        total = len(codes)
+        logger.info(f"共有 {total} 只股票需要检查")
+
+        target_end_dt = datetime.strptime(target_end_date, '%Y-%m-%d')
+        success_count = skip_count = fail_count = 0
+        start_time = time.time()
+
+        for i, code in enumerate(codes):
+            cached_min, cached_max = self.get_stock_date_range(code)
+
+            if user_specified_start:
+                # --- 间隙补齐模式：自动补齐 [D1,D3) 和 (D4,D2] ---
+                cached_min_dt = datetime.strptime(cached_min, '%Y%m%d') if cached_min else None
+                cached_max_dt = datetime.strptime(cached_max, '%Y%m%d') if cached_max else None
+
+                gaps = []  # list of (start_str, end_str)
+                if cached_min_dt is None:
+                    # 无缓存，整个区间都需要下载
+                    gaps.append((target_start_date, target_end_date))
+                else:
+                    # 前段间隙: [target_start, min(cached_min-1, target_end)]
+                    if cached_min_dt > target_start_dt:
+                        head_end_dt = min(cached_min_dt - timedelta(days=1), target_end_dt)
+                        if head_end_dt >= target_start_dt:
+                            gaps.append((target_start_date, head_end_dt.strftime('%Y-%m-%d')))
+                    # 后段间隙: [max(cached_max+1, target_start), target_end]
+                    if cached_max_dt is not None and cached_max_dt < target_end_dt:
+                        tail_start_dt = max(cached_max_dt + timedelta(days=1), target_start_dt)
+                        if tail_start_dt <= target_end_dt:
+                            gaps.append((tail_start_dt.strftime('%Y-%m-%d'), target_end_date))
+                    # [2026-09-01 防御性修复] 中间缺口: 缓存 min/max 覆盖区间, 但中间
+                    #   缺了交易日 (历史坏文件/外部改动)。原逻辑只算前/后段间隙 → 永不补齐。
+                    #   注: 日线整段下载正常流程不会产生中间缺口, 此处为防御性自愈。
+                    try:
+                        mid_gaps = self._find_daily_middle_gaps(code, target_start_dt, target_end_dt)
+                        for mg_s, mg_e in mid_gaps:
+                            gaps.append((mg_s.strftime('%Y-%m-%d'), mg_e.strftime('%Y-%m-%d')))
+                    except Exception as e:
+                        logger.warning(f"  [{code}] 日线中间缺口检测异常: {e}")
+
+                # [2026-09-01] 前段/后段/中间缺口可能重叠, 合并去重后再下载
+                if len(gaps) > 1:
+                    gaps_dt = [(datetime.strptime(s, '%Y-%m-%d'), datetime.strptime(e, '%Y-%m-%d'))
+                               for s, e in gaps]
+                    gaps_dt = self._merge_gap_intervals(gaps_dt)
+                    gaps = [(s.strftime('%Y-%m-%d'), e.strftime('%Y-%m-%d')) for s, e in gaps_dt]
+
+                if not gaps:
+                    skip_count += 1
+                    if (i + 1) % 100 == 0:
+                        elapsed = time.time() - start_time
+                        avg_time = elapsed / (i + 1)
+                        remaining = avg_time * (total - i - 1)
+                        logger.info(
+                            f"进度: {i + 1}/{total} "
+                            f"(跳过: {skip_count}, 成功: {success_count}, 失败: {fail_count})，"
+                            f"预计剩余: {remaining / 60:.1f} 分钟"
+                        )
+                    continue
+
+                for gap_start, gap_end in gaps:
+                    logger.info(f"[{i + 1}/{total}] {code} 补齐间隙: {gap_start} ~ {gap_end}")
+                    df = self.download_raw_daily(code, gap_start, gap_end)
+                    if df is not None and not df.empty:
+                        self.save_raw_daily(code, df)
+                        success_count += 1
+                    else:
+                        fail_count += 1
+                        logger.warning(f"[{i + 1}/{total}] {code} 间隙 {gap_start}~{gap_end} 无数据或下载失败")
+            else:
+                # --- 原有逻辑：仅补尾部（保持不变） ---
+                if cached_max is not None:
+                    cached_max_dt = datetime.strptime(cached_max, '%Y%m%d')
+                    if cached_max_dt >= target_end_dt:
+                        skip_count += 1
+                        if (i + 1) % 100 == 0:
+                            elapsed = time.time() - start_time
+                            avg_time = elapsed / (i + 1)
+                            remaining = avg_time * (total - i - 1)
+                            logger.info(
+                                f"进度: {i + 1}/{total} "
+                                f"(跳过: {skip_count}, 成功: {success_count}, 失败: {fail_count})，"
+                                f"预计剩余: {remaining / 60:.1f} 分钟"
+                            )
+                        continue
+                    start_fetch = (cached_max_dt + timedelta(days=1)).strftime('%Y-%m-%d')
+                else:
+                    start_fetch = '2026-05-08'
+                    logger.info(f"[{i + 1}/{total}] {code} 新股票，从 {start_fetch} 开始下载")
+
+                if start_fetch > target_end_date:
+                    skip_count += 1
+                    continue
+
+                if (i + 1) % 10 == 0 or start_fetch != '2026-05-08':
+                    logger.info(f"[{i + 1}/{total}] 正在处理 {code}，下载区间: {start_fetch} ~ {target_end_date}")
+
+                df = self.download_raw_daily(code, start_fetch, target_end_date)
+                if df is not None and not df.empty:
+                    self.save_raw_daily(code, df)
+                    success_count += 1
+                else:
+                    fail_count += 1
+                    logger.warning(f"[{i + 1}/{total}] {code} 无新数据或下载失败")
+
+            if (i + 1) % 100 == 0:
+                elapsed = time.time() - start_time
+                avg_time = elapsed / (i + 1)
+                remaining = avg_time * (total - i - 1)
+                logger.info(
+                    f"进度: {i + 1}/{total} | 成功: {success_count} | "
+                    f"跳过: {skip_count} | 失败: {fail_count} | "
+                    f"预计剩余: {remaining / 60:.1f} 分钟"
+                )
+            time.sleep(0.05)
+
+        elapsed = time.time() - start_time
+        logger.info("=" * 60)
+        logger.info(
+            f"原始日线更新完成！总计: {total}，"
+            f"成功: {success_count}，跳过: {skip_count}，失败: {fail_count}，"
+            f"耗时: {elapsed / 60:.1f} 分钟"
+        )
+        logger.info("=" * 60)
+
+    def update_all_back_adjust(self):
+        logger.info("=" * 60)
+        logger.info("开始更新后复权因子")
+        logger.info("=" * 60)
+
+        stock_df = self.download_stock_list()
+        codes = stock_df['code'].tolist()
+        total = len(codes)
+        logger.info(f"共有 {total} 只股票需要检查")
+
+        success_count = skip_count = fail_count = 0
+        start_time = time.time()
+
+        for i, code in enumerate(codes):
+            if (i + 1) % 100 == 0:
+                logger.info(f"正在处理 {code} ({i + 1}/{total})")
+            df = self.download_back_adjust(code)
+            if df is not None and not df.empty:
+                self.save_back_adjust(code, df)
+                success_count += 1
+            elif df is not None and df.empty:
+                skip_count += 1
+            else:
+                fail_count += 1
+            if (i + 1) % 100 == 0:
+                elapsed = time.time() - start_time
+                avg_time = elapsed / (i + 1)
+                remaining = avg_time * (total - i - 1)
+                logger.info(
+                    f"进度: {i + 1}/{total} | 成功: {success_count} | "
+                    f"跳过(无除权): {skip_count} | 失败: {fail_count} | "
+                    f"预计剩余: {remaining / 60:.1f} 分钟"
+                )
+            time.sleep(0.05)
+
+        elapsed = time.time() - start_time
+        logger.info("=" * 60)
+        logger.info(
+            f"后复权因子更新完成！总计: {total}，"
+            f"成功: {success_count}，跳过: {skip_count}，失败: {fail_count}，"
+            f"耗时: {elapsed / 60:.1f} 分钟"
+        )
+        logger.info("=" * 60)
+
+    # ==================== 分红数据下载 ====================
+
+    def download_dividend_data(self, code, start_year=2015, end_year=None):
+        """下载单只股票的全部分红数据（按除权除息年份）。
+
+        接口: baostock.query_dividend_data(code, year, yearType='operate')
+
+        关键字段:
+        - dividCashPsBeforeTax: 每股税前现金分红（元/股），可直接 float()
+        - dividStocksPs: 每股送股比例（股/股），可直接 float()
+        - dividReserveToStockPs: 每股转增比例（股/股），可直接 float()
+        - dividCashPsAfterTax: 可能含"或"字，不使用
+        - dividCashStock: 分红送转描述原文
+
+        Returns:
+            DataFrame 或 None
+        """
+        if end_year is None:
+            end_year = datetime.now().year
+
+        session = get_baostock_session()
+        session.ensure_logged_in()
+
+        all_rows = []
+        fields = None
+        for year in range(start_year, end_year + 1):
+            for attempt in range(2):
+                try:
+                    rs = bs.query_dividend_data(
+                        code=code, year=str(year), yearType="operate"
+                    )
+                    if rs.error_code == '0':
+                        while rs.next():
+                            row = rs.get_row_data()
+                            if fields is None:
+                                fields = rs.fields
+                            all_rows.append(row)
+                        break
+                    else:
+                        logger.debug(f"  {code} 年{year}分红查询返回: {rs.error_msg}")
+                        break
+                except (socket.timeout, OSError, ConnectionResetError, BrokenPipeError) as e:
+                    session.report_error(f"socket: {e}")
+                    time.sleep(1)
+                except Exception as e:
+                    logger.debug(f"  {code} 年{year}分红查询异常: {e}")
+                    break
+            time.sleep(0.02)
+
+        if not all_rows or fields is None:
+            return None
+
+        df = pd.DataFrame(all_rows, columns=fields)
+
+        keep_cols = [
+            'dividOperateDate', 'dividRegistDate', 'dividPayDate',
+            'dividCashPsBeforeTax', 'dividStocksPs',
+            'dividReserveToStockPs', 'dividCashStock'
+        ]
+        available = [c for c in keep_cols if c in df.columns]
+        df = df[available].copy()
+
+        for col in ['dividCashPsBeforeTax', 'dividStocksPs', 'dividReserveToStockPs']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+
+        df['dividOperateDate'] = pd.to_datetime(df['dividOperateDate'], errors='coerce')
+        if 'dividRegistDate' in df.columns:
+            df['dividRegistDate'] = pd.to_datetime(df['dividRegistDate'], errors='coerce')
+        if 'dividPayDate' in df.columns:
+            df['dividPayDate'] = pd.to_datetime(df['dividPayDate'], errors='coerce')
+
+        df = df.dropna(subset=['dividOperateDate'])
+        df = df.sort_values('dividOperateDate').reset_index(drop=True)
+        session.update_activity()
+        session.report_success()
+        return df if not df.empty else None
+
+    @staticmethod
+    def _save_dividend_parquet(df, out_path, checked_year, checked_date=None):
+        """保存分红缓存, 并把"已检查年度/检查日期"写入 parquet schema metadata。
+
+        [2026-09-02 修复] 原实现只记 checked_year (年粒度) → 年内新分红事件
+        (如 2026-06 检查后 2026-08 实施的新分红) 因 checked_year==end_year 被
+        永久跳过。现追加 checked_date (检查执行截止日) 日期粒度:
+          跳过条件 = checked_year>=end_year 且 checked_date>=end_date (update_all_dividend)。
+        旧文件 (无 metadata) 由 _get_dividend_check 的 fallback 处理 (checked_date=None
+        → 强制补查一次当年, 之后写入新 metadata)。
+        """
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        table = pa.Table.from_pandas(df)
+        md = {**(table.schema.metadata or {}), b'divid_checked_year': str(checked_year)}
+        if checked_date is not None:
+            md[b'divid_checked_date'] = str(checked_date)
+        table = table.replace_schema_metadata(md)
+        pq.write_table(table, out_path, compression='snappy')
+
+    @classmethod
+    def _get_dividend_check(cls, out_path):
+        """读取分红缓存检查状态 → (checked_year, checked_date)。
+
+        checked_year: 数据已覆盖到的分红年度 (pyarrow metadata 'divid_checked_year')
+        checked_date: 最近一次检查执行截止日期 (metadata 'divid_checked_date',
+                      YYYYMMDD; 旧文件无此键 → None)
+        文件不存在 → (None, None); 旧文件 fallback checked_year=数据最大分红年度,
+        checked_date=None (→ 触发一次当年补查以捕获年内新增)。
+        """
+        if not os.path.exists(out_path):
+            return None, None
+        try:
+            import pyarrow.parquet as pq
+            md = pq.read_metadata(out_path).metadata
+            if md:
+                cy = md.get(b'divid_checked_year')
+                cd = md.get(b'divid_checked_date')
+                checked_year = int(cy) if cy is not None else None
+                checked_date = None
+                if cd is not None:
+                    try:
+                        checked_date = pd.Timestamp(str(cd.decode())).date()
+                    except Exception:
+                        checked_date = None
+                if checked_year is not None:
+                    return checked_year, checked_date
+        except Exception:
+            pass
+        try:
+            df = pd.read_parquet(out_path, columns=['dividOperateDate'])
+            if df.empty:
+                return None, None
+            max_date = pd.to_datetime(df['dividOperateDate'], errors='coerce').max()
+            if pd.isna(max_date):
+                return None, None
+            return int(max_date.year), None
+        except Exception:
+            return None, None
+
+    @classmethod
+    def _get_dividend_checked_year(cls, out_path):
+        """[兼容保留] 只返回已检查年度 (旧调用语义)。"""
+        cy, _ = cls._get_dividend_check(out_path)
+        return cy
+
+    def update_all_dividend(self, start_date=None, end_date=None):
+        """批量下载全部分红数据到 data/dividend_data/。
+
+        增量逻辑 (2026-09-02 修复, 替代 2026-08-17 年粒度版):
+        - 读取缓存检查状态 (checked_year, checked_date), 见 _get_dividend_check
+        - 跳过条件: checked_year >= end_year 且 checked_date >= end_date
+          (原实现只有年粒度 checked_year>=end_year → 年内新分红事件
+           (检查后当月/下月新实施) 被永久跳过 — 用户实证缺失)
+        - 否则补查 [fetch_start_year, end_year] 年度并合并写回,
+          同时写 metadata checked_year=end_year / checked_date=end_date
+        - start_date/end_date 由 CLI --start/--end 传入 (原实现无参调用,
+          CLI 日期被忽略 → 全部按 end_year=今年 跳过)；
+          start_date=None 时年度起点用 2015 (全量历史), end_date=None 用今天。
+
+        baostock query_dividend_data 为年度接口 (yearType=operate),
+        故日期粒度在"年度重查 + 日期跳过标记"层面实现: 同一 end_year 内
+        每次运行重查当年全年 (去重合并), 以捕获年内新增分红。
+        """
+        if end_date is None:
+            end_date = datetime.now()
+        if isinstance(end_date, str):
+            end_date = pd.Timestamp(end_date)
+        if hasattr(end_date, 'date') and not isinstance(end_date, pd.Timestamp):
+            end_date = pd.Timestamp(end_date)
+        end_year = end_date.year
+
+        start_year = 2015
+        if start_date is not None:
+            if isinstance(start_date, str):
+                start_date = pd.Timestamp(start_date)
+            if hasattr(start_date, 'date') and not isinstance(start_date, pd.Timestamp):
+                start_date = pd.Timestamp(start_date)
+            start_year = start_date.year
+        end_date_str = end_date.strftime('%Y%m%d')
+
+        logger.info("=" * 60)
+        logger.info(f"开始下载分红数据: {start_date or '2015-01-01'} ~ {end_date.date()} "
+                    f"(年度 {start_year}~{end_year})")
+        logger.info("=" * 60)
+
+        stock_df = self.download_stock_list()
+        codes = stock_df['code'].tolist()
+        total = len(codes)
+
+        success_count = skip_count = fail_count = empty_count = 0
+        start_time = time.time()
+
+        for i, code in enumerate(codes):
+            safe = code.replace('.', '_')
+            out_path = os.path.join(self.dividend_data_path, f"{safe}_dividend.parquet")
+
+            checked_year, checked_date = self._get_dividend_check(out_path)
+            # 跳过: 已覆盖目标年度 且 检查日期 >= 目标截止日 (日期粒度, 防年内新增遗漏)
+            if (checked_year is not None and checked_year >= end_year
+                    and checked_date is not None and checked_date >= end_date.date()):
+                skip_count += 1
+                if (i + 1) % 200 == 0:
+                    logger.info(f"[{i+1}/{total}] 跳过已最新(至 {checked_date}): {skip_count}")
+                continue
+
+            try:
+                # 补查年度起点:
+                #  - 已检查到 end_year (但 checked_date < end_date, 年内新增场景) → 重查 end_year 当年
+                #  - checked_year < end_year (含旧文件 fallback checked_date=None) → 从 checked_year+1 起补
+                if checked_year is not None and checked_year >= end_year:
+                    fetch_start = end_year
+                else:
+                    fetch_start = (checked_year + 1) if checked_year is not None else start_year
+                    fetch_start = max(fetch_start, start_year)
+                if fetch_start > end_year:
+                    fetch_start = end_year
+                df_new = self.download_dividend_data(code, fetch_start, end_year)
+                if df_new is not None and not df_new.empty:
+                    if checked_year is not None and os.path.exists(out_path):
+                        # 与旧缓存合并 (按分红关键列去重)
+                        df_old = pd.read_parquet(out_path)
+                        df = pd.concat([df_old, df_new], ignore_index=True)
+                        dedup_cols = [c for c in
+                                      ['dividOperateDate', 'dividRegistDate', 'dividPayDate']
+                                      if c in df.columns]
+                        if dedup_cols:
+                            df = df.drop_duplicates(subset=dedup_cols, keep='last')
+                        df = df.sort_values('dividOperateDate').reset_index(drop=True)
+                    else:
+                        df = df_new
+                    self._save_dividend_parquet(df, out_path, end_year, end_date_str)
+                    success_count += 1
+                else:
+                    # 补查年度无新分红: 也写 metadata 标记已检查到 end_date, 避免反复重查
+                    if checked_year is not None and os.path.exists(out_path):
+                        df_old = pd.read_parquet(out_path)
+                        self._save_dividend_parquet(df_old, out_path, end_year, end_date_str)
+                    empty_count += 1
+            except Exception as e:
+                logger.warning(f"[{i+1}/{total}] {code} 分红数据下载失败: {e}")
+                fail_count += 1
+
+            if (i + 1) % 100 == 0:
+                elapsed = time.time() - start_time
+                avg = elapsed / (i + 1)
+                remaining = avg * (total - i - 1)
+                logger.info(
+                    f"进度: {i+1}/{total} | 成功: {success_count} | "
+                    f"跳过: {skip_count} | 无分红: {empty_count} | 失败: {fail_count} | "
+                    f"剩余: {remaining/60:.1f}分钟"
+                )
+            time.sleep(0.05)
+
+        elapsed = time.time() - start_time
+        logger.info("=" * 60)
+        logger.info(
+            f"分红数据下载完成！总计: {total}，成功: {success_count}，"
+            f"跳过(已有): {skip_count}，无分红: {empty_count}，失败: {fail_count}，"
+            f"耗时: {elapsed/60:.1f}分钟"
+        )
+        logger.info("=" * 60)

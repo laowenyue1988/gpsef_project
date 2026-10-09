@@ -1,0 +1,487 @@
+logging:
+  numba_level: WARNING            # 屏蔽 numba JIT 编译内部 DEBUG 日志 (SSA/IR 重写管线), 可调 DEBUG/INFO/ERROR
+
+strategy:
+  name: SmallAlpha191Test3        # [test3-20260905] 因子修复实验沙箱 (rank截面化/停牌过滤/中性化去val/逐日RankIC等)
+  # [test3-20260905] class 指向 test3 隔离沙箱 (复制自 test2 含 O1-O7 全部修复);
+  #   快照隔离目录: data/factor_snapshots_test (由 data.factor_snapshot_dir 驱动)。
+  #   运行: python run_backtest.py --config strategies/small_alpha191_test3/config.yaml
+  class: strategies.small_alpha191_test3.strategy.SmallAlpha191Strategy
+
+backtest:
+  start_date: '20210401'
+  end_date: '20260901'
+  initial_cash: 1000000.0
+  benchmark_code: sh.000300
+
+data:
+  base_path: ./data
+  reference_date: '20220908'
+  factor_snapshot_dir: factor_snapshots_test   # [C2-20260905] 因子快照隔离目录 (test3 专用, 不读旧 factor_snapshots)
+  recomd_snapshot_dir: ./data/wyckoff20_v10_recomd_snapshots   # [Small] 不再使用 (微盘池不依赖V10快照)
+  v10_gate_enabled: false         # [Small] V10上游信号门控已禁用 (无V10快照依赖)
+  v10_gate_max_defer_days: 0      # 最大顺延天数, 0=不限制（无限等）
+  smallcap_pool_size: 300         # [Small] 微盘池: dynamic_pool候选池中 T-1市值最低的股票数
+  pool_cache_tag: o2_20260904     # [O2-20260904] 池缓存文件名隔离: 前缀名单已补 sz.301/302/sz.003/sh.689,
+                                  #   与旧目录(原前缀)共用 smallcap_pool_cache.parquet 会命中旧名单 → 独立 tag 强制重算
+  stock_pool:
+    type: dynamic
+    filters:
+    - st
+    - new_stock
+    - price_min:3
+    - amount_pct:0.1
+
+execution:
+  commission_rate: 0.0003
+  tax_rate: 0.0005
+  min_commission: 5.0
+  slippage: 0.001
+  transfer_fee_rate: 1.0e-05
+  max_positions: 20
+  max_position_pct: 0.1
+
+index_code: all
+# ============================================================
+# [2026-09-02] 风控指数 (risk_index_code) — 回撤熔断趋势确认 + 调仓趋势判断共用信号源
+#   适配性依据 (analysis_risk_index_fit.py, 策略=全市场市值最低300 微盘池):
+#     策略日收益与指数相关性: 中证2000 Pearson 0.65-0.67 (同向率 ~80%) ≫
+#     上证 0.43-0.47 / 沪深300 0.34-0.38 → 中证2000 最能代表策略小盘暴露。
+#   可选值: sh000001(上证) / sh000300(沪深300) / sh932000(中证2000, 默认)
+#   数据文件: data/index_daily/{code}.parquet (中证2000 已补 2018-05 起回算历史)
+# ============================================================
+risk_index_code: sh932000           # [风控指数] 默认中证2000; drawdown_breaker/rebalance_trend_gate 读此参数
+rebalance_interval: 20             # [2026-09-06 修复] 对齐 small_alpha191_test: 20天全清重建调仓 (回退原错位分批)
+rebalance_batches: 1               # [2026-09-06 修复] 1=不分批(全清重建旧行为); >1 才是错位轮动。对齐父策略 small_alpha191_test
+retrain_interval: 1                # [2026-09-06 修复] 每次调仓都重训 (20天调仓 ⇒ 20天重训)。对齐父策略 small_alpha191_test
+train_window_days: 240
+auc_threshold: 0.53                 # [已废弃 2026-09-01] 原 AUC 二元门控阈值, 由 rebalance_trend_gate 的趋势×AUC 联合门控取代 (不再使用)
+ic_gate_threshold: 0.02         # [L2] staged_rank 回归模式门控: 验证集 Spearman IC < 此值 → 空仓 (替代 AUC 门控)
+cv_folds: 5                          # Purged K-Fold折数 (De Prado AFML §7.4)
+cv_embargo_days: 21                   # 每折验证块前后净化天数 (防标签重叠泄露)
+cv_feature_consensus: 1               # [废弃 2026-08-18 P1-1] 原IC准入层已移除 (MDA投票池=基础清理全集, 线性IC不决定非线性模型投票池)
+                                    # 保留该键仅为向后兼容, 代码已传 None               # IC共识阈值: 特征需出现在≥1/5折中才进入MDA投票池
+cv_ic_psi_split_ratio: 0.5            # 折内数据分割: 前50%算IC, 后50%算PSI
+psi_threshold: 0.15                   # PSI稳定性阈值 (>0.15=分布漂移→剔除)
+min_feat_ic: 0.001                    # 最小RankIC (极宽松, 仅除纯噪声)
+ic_mode: daily                        # [B2-20260905] 特征选择IC口径: daily=逐日截面RankIC均值(≥30样本/日守卫) | pooled=旧全面板口径(对照用)
+nan_threshold: 0.4                    # 缺失率阈值 (>40%→丢弃)
+max_corr: 0.85                        # 特征间最大Pearson相关系数 (>0.85→去重)
+min_features: 10                      # 最少保留特征数
+max_features: 150                     # 最多保留特征数
+
+# ============================================================
+# 超参候选选择 (P0-0 轻量版: 重训时用时序末 val 段评估候选, 选最优)
+# 候选依据: 真实回测 SmallAlpha191_20220801_20260522_20260816110527
+#   - 生产训练: 220天/66000样本/15-19特征; PKF折内: 150-171天/45000-51300样本/110-121特征
+#   - 低信噪比 (折内 val AUC 0.52-0.57) → 保守组浅树+强正则, 强表达组依赖 66K 样本量
+#   - c2_baseline_s = 当前 S 档生产配置 (回测基线), 其余为对照
+# 说明: 选择仅作用于 XGBoost 主链路 (PKF折内+生产); LGB 异质集成保持自身 config 配置
+# ============================================================
+hyperparam_search:
+  enabled: true                    # 重训时启用超参选择 (选择阶段耗时 ≈ 4组 × 10-25s)
+  # [A] 选择-评估隔离: 选择只接触剔除生产val后的训练段 (生产val零接触, 消除选择偏倚)
+  # [B] 多窗评估: eval_windows × inner_val_days 连续窗, expanding walk-forward (训练严格早于评估)
+  # [C] 每候选每窗独立 early stopping (消除固定轮数对lr不同候选的偏置)
+  inner_val_days: 20               # [A] 内层评估窗天数 (训练段内部再切)
+  eval_windows: 3                  # [B] 多窗评估数 (得分=各窗平均)
+  early_stopping_rounds: 20        # [C] 每窗早停耐心
+  eval_rounds: 600                 # 每窗训练轮数上限 (use_early_stop=false 时=固定轮数)
+  use_early_stop: true             # [C] true=每窗独立早停 (业界标准); false=固定轮数(legacy)
+  # [2026-08-20 回退] O1+ 多轮迭代方案已弃 (统计无显著差异 + 72% 期重跑PKF开销) → 移除迭代配置
+  candidates:
+    - name: c1_conservative        # 保守: 浅树+最强正则 (低信噪比防御首选)
+      xgb_max_depth: 3
+      xgb_n_estimators: 300
+      xgb_learning_rate: 0.05
+      xgb_subsample: 0.6
+      xgb_col_sample_by_tree: 0.6
+      xgb_reg_alpha: 0.5
+      xgb_reg_lambda: 3.0
+      xgb_min_child_weight: 30
+      xgb_gamma: 0.1
+    - name: c2_baseline_s          # 基准: 当前 S 档 (400/4/0.6/0.7/2.0/25, 回测基线)
+      xgb_max_depth: 4
+      xgb_n_estimators: 400
+      xgb_learning_rate: 0.03
+      xgb_subsample: 0.6
+      xgb_col_sample_by_tree: 0.7
+      xgb_reg_alpha: 0.5
+      xgb_reg_lambda: 2.0
+      xgb_min_child_weight: 25
+      xgb_gamma: 0.0
+    - name: c3_balanced            # 均衡: 中等表达+中等正则
+      xgb_max_depth: 5
+      xgb_n_estimators: 500
+      xgb_learning_rate: 0.025
+      xgb_subsample: 0.7
+      xgb_col_sample_by_tree: 0.7
+      xgb_reg_alpha: 0.3
+      xgb_reg_lambda: 1.5
+      xgb_min_child_weight: 20
+      xgb_gamma: 0.05
+    - name: c4_strong              # 强表达: 依赖 66K 样本支撑 (需 val 验证, 防过拟合)
+      xgb_max_depth: 6
+      xgb_n_estimators: 600
+      xgb_learning_rate: 0.02
+      xgb_subsample: 0.7
+      xgb_col_sample_by_tree: 0.8
+      xgb_reg_alpha: 0.2
+      xgb_reg_lambda: 1.0
+      xgb_min_child_weight: 15
+      xgb_gamma: 0.0
+
+feature_selection:
+  use_voting: true                    # 启用K折MDA投票 (否则纯IC排序)
+  mda:
+    enabled: true                     # OOS Permutation Importance (MDA)
+    n_repeats: 20                     # 每特征置换次数 (越多t检验越可靠)
+    threshold: 0.0                    # MDA固定阈值 (use_std_threshold=true时无效)
+    use_std_threshold: true           # 使用t检验判定 (推荐, 统计上更严谨)
+    t_alpha: 0.05
+    inner_oos_frac: 0.15              # [P0-1] 折内 inner-OOS 段占比 (MDA评估段, 验证块只评AUC)
+    inner_oos_min_days: 20            # [P0-1] inner-OOS 最小天数                     # t检验显著性水平 (单侧)
+  voting:
+    vote_min_folds: 3                 # MDA投票准入: 需≥3折t检验通过才入围候选池
+    vote_min_features: 5             # 最少保留特征数 (不足时逐步放宽vote_min_folds)
+    top_k_features: 40                # 最终Top-K截断
+    weight_ic: 0.0                    # IC排名权重=0 (XGB非线性模型不考虑线性IC)
+    weight_mdi: 0.3                   # MDI(gain)排名权重 (有高基数偏差, 辅助参考)
+    weight_mda: 1.5                   # MDA排名权重 (核心依据, 反映因果贡献)
+    fallback_to_ic_only: true         # 特征不足时回退纯IC排序
+  feature_clustering:                 # 特征聚类去冗余 + CFI 簇级置换重要性 (Prado MLAM Ch.6)
+    enabled: true                     # 启用层次聚类
+    cfi_mode: false                    # [CFI] 簇级置换重要性投票 (替代逐特征MDA投票): 聚类前置 → 簇整体置换MDA → 簇级t检验投票 → 簇内选代表
+    legacy_threshold: false           # [C组对照] true=legacy阈值语义(|corr|≥0.30归簇, 激进压缩); false=标准语义(|corr|≥0.70归簇)
+    diagnose: true                    # [CFI-诊断] 生产模型训练后输出簇级重要性分布到回测目录 cfi_importance/ (纯增量, 不改变生产行为)
+    method: hierarchical              # 层次聚类 (ward)
+    corr_threshold: 0.70              # 簇切割阈值: |Spearman corr| ≥ 0.70 归为一簇
+    corr_method: spearman             # 相关矩阵方法
+    repr_method: sfi                  # 簇内代表: sfi(单特征OOS重要性, AFML §8.4.1) | score_max | mda_max | ic_max
+    min_cluster_size: 2               # 簇最小大小 (小于则成员全部保留)
+    log_clusters: true                # 日志输出簇详情
+
+# ============================================================
+# XGBoost 训练参数 (S档 — 2026-08-04 应用, 基于 ~28.7K/折/15特征调优)
+# 全链路追踪: 220天→5折Purged(embargo=21)→每折train≈134天×~214股≈28.7K样本
+# S档数值来源: Alpha191_指数板块策略族文档_20260804.md 三档参数表
+#   (400/4/0.6/0.7/2.0/25, N<50K 防过拟合; gamma/reg_alpha 未定义保持基准)
+# 对照 M档 600/6/0.7/0.8/1.5/15 / L档 800/7/0.8/0.85/1.0/8
+# 备份: config.yaml.bak_20260804_1716
+# ============================================================
+xgb_n_estimators: 400           # S档: 小样本早停更快 (M档600)
+xgb_max_depth: 4                # S档: 更浅防过拟合 (M档6)
+xgb_learning_rate: 0.03         # 降低学习率增强泛化 (28.7K样本, 低信噪比)
+xgb_subsample: 0.6              # S档: 每轮60%样本 ≈17K (M档0.7)
+xgb_col_sample_by_tree: 0.7    # S档: 每树70%特征 ≈10个 (M档0.8)
+xgb_reg_alpha: 0.5              # L1正则化 (促进特征选择, 保持基准)
+xgb_reg_lambda: 2.0             # S档: 增强L2防过拟合 (M档1.5)
+xgb_min_child_weight: 25        # S档: 更强叶约束≈690样本/叶 (M档15)
+xgb_gamma: 0.0                  # 基准 (S档未定义, 保持)
+xgb_random_state: 42
+xgb_early_stopping_rounds: 20
+xgb_eval_metric: auc
+xgb_tree_method: hist
+xgb_device: cpu
+ensemble_seeds:
+- 42
+- 43
+- 44
+- 45
+- 46
+
+# ============================================================
+# LightGBM 异质集成 (S档 — 2026-08-04 对齐XGBoost S档, 防过拟合)
+# XGBoost + LightGBM 双重集成, 权重融合: xgb=0.6, lgb=0.4
+# 备份: config.yaml.bak_20260804_1716
+# ============================================================
+lightgbm:
+  enabled: false                   # 启用 LightGBM 异质集成
+  ensemble_weight_xgb: 1.0         # XGBoost 预测权重 (LGB作为辅助验证)
+  ensemble_weight_lgb: 0.0         # LightGBM 预测权重
+  params:                          # LightGBM 训练参数 (对齐XGBoost S档复杂度)
+    objective: binary
+    metric: auc
+    boosting_type: gbdt
+    num_leaves: 15                 # S档: ~2^4 (对齐 max_depth=4)
+    learning_rate: 0.03            # 对齐 XGBoost
+    feature_fraction: 0.7          # 每轮70%特征 (对齐XGB colsample 0.7)
+    bagging_fraction: 0.6          # S档: 每轮60%样本 (对齐XGB subsample 0.6)
+    bagging_freq: 5                # 每5轮重采样
+    min_data_in_leaf: 80           # S档: 更强叶约束 (M档50)
+    lambda_l1: 0.5                 # L1正则化 (保持)
+    lambda_l2: 2.0                 # S档: 增强L2 (M档1.5)
+    max_depth: 4                   # S档: 更浅防过拟合 (M档6)
+    num_threads: 2
+    verbose: -1
+
+# ============================================================
+# 类别平衡 (对抗标签不均衡)
+# ============================================================
+# mode: "auto" = 自动计算 scale_pos_weight = N_neg / N_pos，注入 XGBoost
+#       "none" = 不使用类别平衡
+# 原理: scale_pos_weight 让 XGBoost 对少数类样本的梯度乘以该权重
+# 在CV各折内按折内训练集独立计算，生产模型按全训练集计算
+xgb_class_balance: "auto"
+
+# Alpha191 因子 Score 体系
+# 在中性化后的 _neu 列上计算先验知识评分
+alpha191_score:
+  enabled: true                    # 是否启用
+  tanh_amplitude: 0.4              # tanh 映射幅度 (score = 0.5 ± amplitude × tanh)
+  tanh_k: 3.0                      # tanh 缩放系数 (z = raw / (k × std))
+  oversold_threshold: 0.20         # 超卖截面分位数阈值 (低于此值→看多)
+  overbought_threshold: 0.80       # 超买截面分位数阈值 (高于此值→看空)
+
+meta_labeling:
+  enabled: true
+  candidate_pool_size: 300
+  pt_mult: 6.3   #9/6.3
+  sl_mult: 4.7  #6.8/4.7
+  max_hold_days: 20
+  minute_freq: '5'
+  daily_vol_window: 20
+  vol_multiplier: 1.0
+  vol_method: ewma
+  vol_ewma_lambda: 0.94
+  vol_ewma_seed_days: 60
+  max_meta_selected: 20
+  prob_temperature: 0.5         # 概率温度缩放 (softmax温度技巧的概率版; 由 _create_model_config 从本配置注入, 2026-08-05 修复)
+  prob_weight_alpha: 0.7
+  auc_gate_enabled: true            # [对齐E3-20260908] staged_rank 模式启用 IC 门控(阈值=顶层 ic_gate_threshold 0.02);
+                                      #   binary 模式此键无副作用(Fix-20260907 起仅 rank 语义生效, binary 仍走趋势×AUC 联合门控)
+  label_mode: staged_rank           # [对齐E3-20260908] 标签模式: relative_barrier=旧三重屏障 | staged_binary=[L1]分阶段退出二分类 | staged_rank=[L2]分阶段实现收益的截面分位(回归目标, 半年窗口 E3 实验最优: +9.40%/夏普1.33)
+  label_entry_align: next_day_open   # [O3-20260904] 标签入场价对齐交易执行: next_day_open=事件日次一交易日open(默认, 消除隔夜跳空偏差) | event_date_close=事件日close(旧口径)
+  label_min_abs_ret: 0.0        # [L1] 二分类前过滤: |realized_ret| < 此值的事件丢弃 (0=不过滤, 保留全部样本)
+  calibration_method: platt      # isotonic→platt: 平滑sigmoid，消除binning平台效应 (staged_rank 回归模式自动跳过校准)
+  # [v3.7] 标签质量样本加权: PT/SL强信号样本×2, expire弱信号×1
+  #   实证依据: expire占49%样本但正样本率仅54.2%≈随机, PT/SL标签确定性100%
+  #   XGBoost通过梯度抵消容忍噪声, 但加权后模型优先拟合强信号, 二阶收益
+  sample_weight_pt_sl_multiplier: 2.0   # PT/SL样本额外权重倍数 (1.0=不加权, 2.0=推荐)
+
+# ============================================================
+# [v3.7] 分阶段止盈止损（σ 倍数驱动, 业界标准实践）
+# ============================================================
+# 设计原则:
+#   所有阈值以 EWMA daily_vol 的 σ 倍数定义, 非固定百分比
+#   σ 倍数使参数在不同个股波动率/市场环境下自动适应
+#   分阶段退出通过渐进减仓捕获脉冲收益, 同时保留仓位给长牛股
+#   PT触发后SL上移(利润锁定): S1 PT→breakeven, S2 PT→+1σ, S3 PT→+2σ
+#   蒙特卡洛验证: PT锁利 EV+0.44σ, Sharpe翻倍(0.224→0.443), P5改善36%
+#   标签层不动 (Triple-Barrier 6.3σ/4.7σ), 仅交易端改用分阶段
+#
+# σ空间实证 (基于354,900条V10选股, EWMA口径):
+#   P(≥4σ|≥2σ)=63.2%  P(≥6σ|≥4σ)=62.5%  P(≥8σ|≥6σ)=64.7%
+#   σ水平强自相关: 突破一道门槛后, 有~63-68%概率继续破下一道
+#   因此S3不应全清(原设计1.0错), 改为50%留半仓给5σ+长牛股
+staged_exit:
+  enabled: true                     # 总开关: false 停用分阶段退出 (交易端仅到期/调仓退出; 标签端同步降级为 relative_barrier 三重屏障)
+
+  # ── 阶段阈值 (σ 倍数) ──
+  # sell_pct = 占初始仓位的比例 (非累计, 非剩余)
+  # 累计卖出: S1→25% S1+S2→60% S1+S2+S3→80% S1-4→100%
+  # ⚠️ [2026-09-02 方案A 裁决] 阶段为【σ 事件驱动, 无持有期门槛】:
+  #    S1-S4 由 stageX_done 标记无条件同时检查, 任何持有天数可触发任意阶段,
+  #    单日大跌可击穿全清 (回测验证合理, 见 分阶段止盈止损_注释vs持有期门槛_数据分析)。
+  #    [2026-09-06] 持有期一律以 meta_labeling.max_hold_days 为准 (staged_exit 各 stage 已删除 max_hold_days 死配置)。
+  stage1:                           # Stage 1: 脉冲捕获 (±3σ)
+    pt_sigma: 3.0                  # [最终裁决 2026-08-31] S1 止盈 3.0σ (格栅+全窗口验证最优: R12)
+    sl_sigma: -3.0                 # [最终裁决 2026-08-31] S1 止损 -3.0σ (与止盈同步)
+    sell_pct: 0.25                 #   卖出初始仓位的25% (剩余75%)
+
+  stage2:                           # Stage 2: 趋势确认 (±3σ)
+    pt_sigma: 3.0                  #   止盈 σ 倍数 (3σ ≈ 6.6%)
+    sl_sigma: -3.0                 #   止损 σ 倍数 (-3σ)
+    sell_pct: 0.35                 #   卖出初始仓位的35% (累计60%, 剩余40%)
+
+  stage3:                           # Stage 3: 长尾收割A (±4σ)
+    pt_sigma: 4.0                  #   止盈 σ 倍数 (4σ ≈ 8.7%)
+    sl_sigma: -4.0                 #   止损 σ 倍数 (-4σ)
+    sell_pct: 0.20                 #   卖出初始仓位的20% (累计80%, 剩余20%)
+                                     #   实证: P(≥6σ|≥4σ)=62.5%, 留20%仓位捕获后续长牛
+
+  stage4:                           # Stage 4: 长尾收割B / 到期退出 (9σ PT / -4σ SL)
+    pt_sigma: 6.0                  #   止盈 σ 倍数 (= meta_labeling.pt_mult, 与标签端一致)
+                                     #   实证: P(≥9σ|≥4σ)=33%, 已到4σ未达9σ均值5.97σ
+                                     #   期望捕获6.97σ vs 5σ清仓的4.89σ, B胜出+2.08σ
+    sl_sigma: -4.0                 #   止损 σ 倍数 (-4σ, 到期兜底不再放宽)
+    sell_pct: 0.20                 #   清仓最后20%初始仓位 (累计100%)
+                                     #   到期退出日由 before_market_open 标记 (持有期=meta_labeling.max_hold_days)
+
+  # ── 硬兜底保护 ──
+  hard_sl_sigma: -6.0              # 任意阶段触发此 σ 倍数立即全清 (<2%概率)
+                                    #   用于防御极端黑天鹅/连续跌停等不可控风险
+
+  # ── 闲置现金再投资 ──
+  reinvest_enabled: false          # 关闭: 阶段卖出后释放的现金不再投资
+                                     #   理由: 1)无日志不可观测 2)分散后<5000阈值几乎不执行
+                                     #   3)逻辑矛盾(减仓锁定利润后又加仓同一只)
+  reinvest_min_amount: 5000        # 最低再投资金额 (元, 避免碎片化操作)
+
+  # ── [E5a-2] 早期保本保护 (profit_protect / breakeven stop) ──
+  #   业界标准资金管理: 持仓浮盈达阈值后, 即使未触发任何止盈(PT), 也把止损上移至保本,
+  #   防止"浮盈回吐成亏损"(数据实证: E3 中 19 笔浮盈2~4%回落至到期, 亏-36.5K 且从未触发PT)
+  #   语义(与标签端 labels.simulate_staged_path 逐行同步): 累计最高浮盈(σ)≥trigger_sigma
+  #   的【次日开盘】起, 有效SL下限 = max(原σ止损, sl_sigma), 盘中触及即平对应阶段份额。
+  #   注: 与既有"利润锁定"互补——利润锁定在 PT 触发后生效(S1→0σ/S2→+1σ/S3→+2σ),
+  #   本保护填补"浮盈但未达 PT 阈值"的空白区间。默认关闭=原行为不变。
+  profit_protect:
+    enabled: false                 # 总开关 (实验 E5a-2 时置 true)
+    trigger_sigma: 1.0             # 触发: 累计浮盈峰值 ≥ 1.0σ (约对应日均vol下的 +2%)
+    sl_sigma: 0.0                  # 抬升后止损: 0σ=保本(入场价); >0 可锁定小利
+
+# ============================================================
+# [2026-08-29 方案A-1] 组合级回撤熔断 (drawdown breaker)
+#   只限建仓、不强清; 触发保守优先 + 市场信号恢复 + 峰值重置 (grid_lowvol 死锁教训)
+#   状态机: 0=NORMAL(满仓) → 1=HALF(建仓x0.5) → 2=FLAT(建仓x0, 清空目标)
+#   触发: 净值回撤>15%→FLAT; >10%→HALF (T-1 净值, 盘前可知, 无未来)
+#   恢复: FLAT→HALF 需指数≥MA20 连续3日确认+峰值重置(空仓净值恒定→净值恢复条件死锁,
+#         必须用市场信号); HALF→NORMAL 回撤收窄<5% (半仓净值会动, 可达)
+#   实测依据: 2024-12-23 单日-6.5% / 最大回撤-15.97% 均无组合级熔断
+# ============================================================
+drawdown_breaker:
+  enabled: true                    # 总开关 (false=完全关闭, 回退到仅分阶段止盈止损)
+  dd_half: 0.10                    # 回撤熔断-半仓: 净值回撤 >10% → 建仓 x0.5
+  dd_flat: 0.15                    # 回撤熔断-空仓: 净值回撤 >15% → 不建仓 (清空目标)
+  dd_recover_full: 0.05            # 恢复: HALF→NORMAL 回撤收窄至 <5% (相对峰值重置后的基线, 可达)
+  trend_confirm_days: 3            # 恢复: FLAT→HALF 需指数≥MA 连续 N 日确认 (防假突破)
+  index_code: sh000001             # [回退值, 实际由顶层 risk_index_code 统一控制, 默认中证2000]
+  index_ma: 20                     # 趋势确认均线周期
+
+# ============================================================
+# [2026-09-01 方案A-2 改造] 调仓日趋势 × AUC 联合门控
+#   (取代原"指数<MA→建仓x0.5"趋势过滤 + 原 AUC 二元门控, 合并为二维决策矩阵)
+#   调仓日指数收盘 >= MA(趋势强): 折集成 meta_AUC > auc_threshold_up → scale_up_ok; 否则 scale_up_bad
+#   调仓日指数收盘 <  MA(趋势弱): 折集成 meta_AUC > auc_threshold_dn → scale_dn_ok; 否则 scale_dn_bad
+#   只影响调仓日建仓 (不强清); 与回撤熔断 dd_scale 相乘合成最终建仓规模
+#   依据: 趋势强时放宽 AUC 门控(0.50)允许满仓, 趋势弱时收紧(0.54)控制暴露
+#   [2026-09-02] index_code 由顶层 risk_index_code 统一控制 (默认中证2000)
+# ============================================================
+rebalance_trend_gate:
+  enabled: false                    # [对齐E3-20260908] 总开关。false=关闭(当前默认)——
+                                      #   实验结论: binary 下趋势×AUC 门控为净负(E3b: 关掉+1.7pp, cal AUC≈0.52 噪声砍仓);
+                                      #   staged_rank 模式模型质量改由 IC 门控裁决(Fix-20260907 rank 分支自动跳过本门控)。
+                                      #   如需 binary 模式复启用置 true(仅 binary 语义生效)
+  index_code: sh000001             # [回退值, 实际由顶层 risk_index_code 统一控制, 默认中证2000]
+  ma: 10                           # 趋势判断均线周期 (R12 最终裁决 MA10)
+  auc_threshold_up: 0.52           # 指数>=MA(趋势强) 时的 AUC 阈值
+  auc_threshold_dn: 0.54           # 指数<MA(趋势弱) 时的 AUC 阈值
+  scale_up_ok: 1.0                 # 指数>=MA 且 AUC > auc_threshold_up → 建仓 x1.0 (满仓)
+  scale_up_bad: 0.5                # 指数>=MA 且 AUC <= auc_threshold_up → 建仓 x0.5
+  scale_dn_ok: 0.5                 # 指数<MA 且 AUC > auc_threshold_dn → 建仓 x0.5
+  scale_dn_bad: 0.0                # 指数<MA 且 AUC <= auc_threshold_dn → 建仓 x0 (空仓)
+
+ffd:
+  enabled: true
+  default_d: 0.35
+
+neutralization:
+  enabled: true
+  use_market_cap: true
+  use_industry: true
+  exclude_prod_val_in_fit: true   # [B1-20260905] P2-1: 中性化OLS beta的fit面板剔除生产val段(与ensemble切割同规则); false=旧行为(对照用)
+
+AUTO_STAGE_CONFIG:
+  1:
+    n_trials: 2
+    n_jobs: 1
+  2:
+    n_trials: 2
+    n_jobs: 1
+  3:
+    n_trials: 2
+    n_jobs: 1
+  4:
+    n_trials: 2
+    n_jobs: 1
+  5:
+    n_trials: 2
+    n_jobs: 1
+
+tech_filter:
+  enabled: false
+  method: ipbs_soft_rerank
+  extended_pool_size: 30
+  ipbs_lambda: 0.15
+  cpr_window: 5
+  vwap_window: 5
+  distr_volume_threshold: 1.2
+  distr_volume_ma_window: 20
+  ipbs_exit_enabled: true
+  ipbs_exit_cpr_threshold: 0.3
+  ipbs_exit_distr_threshold: 0.7
+  ipbs_exit_vwap_threshold: -0.01
+  min_remaining: 5
+
+# ============================================================
+# [v3.0] GARCH 持仓波动率仓位控制
+# ============================================================
+garch_control:
+  enabled: false                # 启用 GARCH 仓位控制
+  vol_target: 0.20            # 年化目标波动率 20%
+  lookback: 250               # GARCH 拟合窗口（交易日），250天为 Engle(2001) 最低要求
+  vol_method: garch           # 波动率方法：garch（优先，fail 降级 EWMA）| ewma
+  vol_model: EGARCH           # ARCH族模型: EGARCH(默认, 捕获杠杆效应) | Garch | GJR-GARCH
+  ewma_lambda: 0.94           # EWMA 衰减因子（RiskMetrics 标准值）
+  min_scale: 0.0              # 最低仓位比例 (v3.3: 不再设硬地板, 由四级回撤保护接管极端场景)
+  max_scale: 1.0              # 最高仓位比例（不加杠杆）
+  drawdown_limit: 0.20        # 回撤保护阈值
+  use_drawdown_control: false  # 启用回撤叠加保护
+  dd_function: concave        # 回撤函数: concave=sqrt(凹函数,推荐)
+  # --- v3.4 Recovery buffer (replaces cooldown) ---
+  use_recovery_buffer: false   # 启用恢复缓冲: DD从>=15%回落到<15%时逐步恢复
+  recovery_buffer_periods: 3   # 缓冲周期: 分N期逐步从硬地板恢复到凹函数水平
+  # --- v2.0 新增参数 ---
+  garch_dist: t               # GARCH分布: t=Student-t(肥尾, 推荐) | normal=正态(legacy)
+  use_ewma_cross_check: false  # EWMA交叉验证: 取max(GARCH, EWMA), 防止极端场景低估
+  use_gradual_cooldown: false  # 冷却渐进解锁: 冷却期内线性恢复仓位, 避免恢复滞后
+  use_cooldown_episode_tracking: false # 冷却回撤周期追踪: 单次触发, 回撤恢复前不重置
+  secondary_dd_threshold: 0.15 # 二级回撤地板阈值: dd>=15%
+  secondary_dd_floor: 0.50     # 二级回撤地板值 (v3.2: 0.15→0.50, 对标业界)
+  tertiary_dd_threshold: 0.20  # 三级回撤地板阈值: dd>=20%
+  tertiary_dd_floor: 0.25      # 三级回撤地板值 (v3.2: 0.05→0.25)
+  # --- v3.0 新增参数 ---
+  use_kill_switch: false        # 30%+回撤Kill-Switch
+  kill_switch_threshold: 0.30  # Kill-Switch触发阈值
+  kill_switch_floor: 0.0       # Kill-Switch仓位地板
+  kill_switch_lock_periods: 5  # v3.2: 时间锁定周期 (到期后自动重启)
+  use_adf_test: true          # ADF平稳性检验（非平稳则降级EWMA）
+  adf_pvalue_threshold: 0.05   # ADF p值阈值
+  use_arch_lm_test: true       # ARCH-LM异方差检验（无ARCH效应则降级EWMA）
+  arch_lm_pvalue_threshold: 0.05 # ARCH-LM p值阈值
+  use_winsorize: false         # 极端值Winsorize处理
+  winsorize_lower: 0.005       # 下分位（0.5%）
+  winsorize_upper: 0.995       # 上分位（99.5%）
+
+# ============================================================
+# [2026-08-18] 因子验证三件套 (SHAP时序/ADV/CIC) 已完全移除
+# 依据: 审查报告结论 (SHAP 0票空转/ADV与PSI冗余/CIC 86%误杀) + 用户决策
+# 特征筛选由 ensemble 内 Purged K-Fold (低方差+IC+PSI+MDA投票) 承担
+# ============================================================
+
+# ============================================================
+# [v3.0] BARRA 约束组合优化（需预构建 BARRA 快照）
+# ============================================================
+# 前置条件：运行 build_barra_snapshots.py --start 20210101 --end 20260522
+barra:
+  enabled: false              # 启用 BARRA 约束优化
+  snapshot_dir: ./data/barra_exposures  # BARRA 因子暴露快照目录
+  baseline_index_code: csi800 # [2026-09-08] 基线指数(风险基准)可切换:
+                              #   csi800 = 沪深300∪中证500 (默认, 大盘+中盘)
+                              #   hs300  = 沪深300
+                              #   zz500  = 中证500
+                              #   sh000001 = 上证指数成分 (快照 sh 前缀近似)
+                              #   sh932000 = 中证2000 (微盘, 与 small_alpha191 策略池最匹配, 快照市值区间近似)
+                              #   影响: 因子偏离基准(B_bench)与行业权重基准; 快照按 baseline 区分命名
+  risk_aversion: 0.5          # 风险厌恶系数 (越大越分散, 0.5=alpha主导, 2.0=风控主导)
+  max_weight: 0.10            # 单股权重上限 10%
+  max_ind_dev: 0.12           # 行业偏离上限
+  lambda_dev: 0.2             # 因子偏离惩罚 (0.2=弱约束/alpha主导, 0.5=均衡, 1.0=强约束)
+  lambda_l2: 0.3              # alpha保留惩罚 (0.3=弱约束/允许偏离w_target, 0.5=均衡, 1.0=贴近等权)
+  lambda_ind: 0.3             # 行业集中度惩罚 (0.1=允许集中, 0.3=均衡, 0.6=强分散)
+  expected_ic: 0.05          # 预期 IC（alpha 向量构建用; 2026-09-08 起 strategy 运行时改读实测 meta_auc/IC）
+  alpha_scale: 10.0          # [2026-09-08 量纲修复] alpha 缩放系数: alpha = alpha_scale × IC × vol_target × z
+                             #   (原式对弱 IC 产出 alpha 过小被风险项压制; 10 使 alpha 与组合风险同量级)
+  vol_target: 0.15           # 波动率目标（alpha 向量构建用）
+  ewma_decay: 0.94           # EWMA 协方差衰减因子
+  min_positions: 20          # 最少持仓数（不足时跳过 BARRA）

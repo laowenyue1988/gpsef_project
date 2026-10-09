@@ -1,0 +1,83 @@
+# strategies/grid_lowvol/config.yaml
+# 网格 × 低波动 EGARCH 量化策略
+# 每日盘前: RV20 全市场初筛 → 候选池 EGARCH(1,1) 预测未来 h 日波动 → 选最低 top_n 等权
+# 持仓期: 每只 5 网格, 5 分钟线日内网格交易; 预测波动超边界 → 开盘清仓 + 补入最低波动股
+# 论证与审核: deliverables/网格低波动EGARCH策略论证与设计_20260821.md
+
+strategy:
+  name: "GridLowVol"
+  class: "strategies.grid_lowvol.strategy.GridLowVolStrategy"
+
+backtest:
+  start_date: "20220801"
+  end_date: "20260522"
+  initial_cash: 100000000.0
+  benchmark_code: "sh.000300"
+
+data:
+  base_path: "./data"
+  reference_date: "20260522"      # 统一复权基准日 (日线收益率口径, 与引擎一致)
+  # [2026-08-21 pool-fix] 基础股票池对齐 alpha191 系: DynamicStockPool 过滤池
+  #   (ST/ST历史/次新股/价格≥3元/成交额后10%剔除), 避免全市场池选入退市股/ST股
+  #   日志对应: [2022-08-01] ST过滤后4543 → ST历史4497 → 次新4435 → 价格4309 → 成交额3878
+  stock_pool:
+    type: dynamic
+    filters:
+    - st
+    - new_stock
+    - price_min:3
+    - amount_pct:0.1
+
+# ============================================================
+# 策略参数 (论证见设计文档 §1)
+# ============================================================
+grid_lowvol:
+  # ---- 选股与波动率预测 ----
+  top_n: 10                       # 低波动目标持仓数
+  candidate_pool: 200             # RV20 初筛候选池 (200, 与 041202 一致; 曾被误改为2000)
+  vol_horizon_days: 20            # 波动率预测周期 h ("未来一段时间", 与换仓/预警口径一致)
+  egarch_window: 250              # EGARCH 估计窗口 (交易日, ~1 年)
+  rv_min_days: 20                 # RV20 初筛最少样本 (不足剔除)
+  # [2026-08-22 opt2] 预警降频: mult 2.0→2.5 + 连续 3→5 日 (041202 预警138次/11.7亿换手过高)
+  vol_alert_mult: 2.5             # [P1] 预警倍数: 持仓预测波动 > 2.5×目标池中位 (原2.0, 041202预警频繁)
+  vol_alert_days: 5               # [P1] 连续 N 日超阈值才清仓 (原3, 滤除低波股日常噪声)
+  warmup_days: 280                # 数据预热天数 (≥ egarch_window+30, 数据加载用)
+
+  # ---- 网格 (2026-08-21 P0+P1 重构: 跨日固定基准 + 配对网格) ----
+  grid_levels: 5                  # 网格格数 (5 格: 上2卖 + 下2买 + 基准)
+  grid_width_sigma: 1.0           # [P1] 格宽 = 1.0 × EGARCH 预测日σ (原0.5过窄, 单格利润<成本5倍)
+  grid_band_sigma: 2.0            # 网格边界 = ±2σ (超出视为单边行情, 由盘前预警处理)
+  base_fraction: 0.6              # [2026-08-22 opt-P1] 开盘底仓 = 单只预算 60% (原0.4, 仓位利用低)
+  trend_gate_ma: 20               # [P0] 趋势闸门: 归一化价格 < MA20 → 网格只卖不买 (0=关闭)
+  # [2026-08-22 opt2] 行业分散加强: 3→2 (收敛价值暴露 -2.53pp 拖累; 041202 暴露+0.583)
+  max_per_industry: 2             # [2026-08-22 opt-P2] 行业分散: 目标池每行业上限 (0=关闭)
+  pool_subset: "all"              # [2026-08-22 opt] 基础池子集: all=过滤池(默认) | smallcap=过滤池∩市值最低N只(实验, 已被回测否决)
+  smallcap_size: 600              # [2026-08-22 opt] smallcap 子集: 市值最低 N 只 (微盘 5-17亿, 高波动风险)
+
+  # [2026-08-22 opt-P0/P1] 组合级风控 (状态机: 0=NORMAL 1=TREND_DOWN 2=HALF 3=FLAT)
+  # [2026-08-22 recover] 恢复机制修复: FLAT→HALF 由"回撤收窄"改为市场信号(指数≥MA60 连续确认)+
+  #   峰值重置(回撤基线归零)——原条件在空仓净值恒定下永不可达, 会导致永久空仓死锁
+  # [2026-08-22 opt2] 缩短空仓期/减少踏空: index_ma 60→40(趋势闸门灵敏化), trend_confirm_days 3→2,
+  #   dd_recover_full 0.015→0.03(HALF→NORMAL 放宽, 相对恢复入场点回撤容忍3%, 可达)
+  combo_gate:
+    enabled: true                 # 总开关 (false=完全关闭, 回退到仅个股闸门)
+    index_ma: 40                  # 组合趋势闸门: 沪深300 收盘 < MA40 → TREND_DOWN 只卖不买 (原60, 缩短锁仓)
+    dd_half: 0.05                 # 回撤熔断: 净值回撤 >5% → HALF 半仓 (每只持仓减半)
+    dd_flat: 0.08                 # 回撤熔断: 净值回撤 >8% → FLAT 清仓
+    dd_recover_full: 0.03         # 恢复: HALF→NORMAL 回撤收窄阈值 (原0.015→0.03, 相对恢复入场点, 可达)
+    trend_confirm_days: 2         # 恢复: FLAT→HALF / HALF→NORMAL / TREND_DOWN→NORMAL 需指数≥MA 连续 N 日确认 (原3→2, 加速恢复)
+
+  # ---- 其他 ----
+  verbose: true                   # 调仓/网格日志
+
+# ============================================================
+# 执行参数 (框架默认)
+# ============================================================
+execution:
+  commission_rate: 0.00025
+  tax_rate: 0.001
+  slippage: 0.001
+  max_positions: 10
+
+logging:
+  numba_level: "WARNING"

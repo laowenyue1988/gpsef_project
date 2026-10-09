@@ -1,0 +1,3 @@
+﻿pid=29012 name=powershell.exe created=10/09/2026 00:13:45
+    C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.EXE -NoProfile -NonInteractive -Command "if (-not (Get-Variable -Name CODEBUDDY_SAFE_DELETE_PS_READY -Scope Global -ErrorAction SilentlyContinue))
+TOTAL = 1

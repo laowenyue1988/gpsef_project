@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Alpha191 微盘股策略 · 一页纸结论（向团队汇报）</title>
+<style>
+  :root{
+    --ink:#14181d; --ink2:#3a4450; --muted:#6b7785;
+    --line:#dde3e9; --line2:#eef1f5;
+    --blue:#1a5fb4; --bluebg:#eff5fd;
+    --up:#c62828; --down:#1e7a46; --warn:#a86400; --warnbg:#fff8ec;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:#e9edf1;}
+  body{font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+       color:var(--ink); -webkit-font-smoothing:antialiased;}
+  .page{width:210mm; min-height:297mm; margin:6mm auto; background:#fff;
+        padding:7.5mm 9mm 5.5mm; box-shadow:0 2px 14px rgba(20,30,45,.16);
+        font-size:8.4pt; line-height:1.37; display:flex; flex-direction:column;}
+
+  .hdr{display:flex; justify-content:space-between; align-items:flex-end;
+       border-bottom:2px solid var(--ink); padding-bottom:1.6mm; gap:5mm;}
+  .hdr h1{margin:0; font-size:13.4pt; line-height:1.16;}
+  .hdr h1 small{display:block; font-size:7.5pt; font-weight:400; color:var(--muted); margin-top:.9mm;}
+  .hdr .meta{font-size:7.1pt; color:var(--muted); text-align:right; line-height:1.45; white-space:nowrap;}
+
+  .verdict{margin-top:1.8mm; background:var(--bluebg); border-left:3.5px solid var(--blue);
+           padding:1.7mm 2.2mm; font-size:8.7pt; line-height:1.42;}
+  .verdict b{color:var(--blue);}
+  .verdict .hl{background:#fff2c4; padding:0 1px; font-weight:700; color:var(--up);}
+
+  .sec{margin-top:1.8mm;}
+  .sec-h{display:flex; align-items:center; gap:1.5mm; margin-bottom:1mm;}
+  .sec-h .no{flex:0 0 auto; width:4.4mm; height:4.4mm; border-radius:50%; background:var(--ink);
+             color:#fff; font-size:6.7pt; font-weight:700; display:flex;
+             align-items:center; justify-content:center;}
+  .sec-h h2{margin:0; font-size:9.3pt;}
+  .sec-h .tag{margin-left:auto; font-size:7pt; color:var(--muted);}
+
+  table{width:100%; border-collapse:collapse; font-size:7.7pt;}
+  th,td{border:1px solid var(--line); padding:.68mm 1.2mm; text-align:left; vertical-align:top;}
+  th{background:var(--line2); font-weight:700; color:var(--ink2); font-size:7.5pt;}
+  td.num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+  td.mid{text-align:center;}
+  .up{color:var(--up); font-weight:700;} .down{color:var(--down); font-weight:700;}
+  .ok{color:var(--down); font-weight:700; white-space:nowrap;}
+
+  .note{margin-top:.9mm; font-size:7.4pt; color:var(--ink2); line-height:1.36;}
+  .note b{color:var(--ink);}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:2mm;}
+  .card{background:#f6f8fb; border:1px solid var(--line); border-radius:1mm; padding:1.5mm 1.9mm;}
+  .card h3{margin:0 0 1mm; font-size:8.2pt; color:var(--blue);
+           border-bottom:1px solid var(--line); padding-bottom:.6mm;}
+  ul{margin:0; padding-left:3.2mm;}
+  li{margin-bottom:.75mm; font-size:7.7pt; line-height:1.36;}
+  li:last-child{margin-bottom:0;} li b{color:var(--ink);}
+
+  ol.def{margin:0; padding-left:4mm; column-count:2; column-gap:3.4mm;}
+  ol.def li{font-size:7.6pt; margin-bottom:.85mm; break-inside:avoid;}
+  .res{margin-top:1.2mm; background:#f4f9f5; border:1px solid #cfe6d6;
+       border-left:3.5px solid var(--down); padding:1.5mm 1.9mm; font-size:7.9pt; line-height:1.37;}
+
+  .warn{background:var(--warnbg); border:1px solid #f0dcbc; border-left:3.5px solid var(--warn);
+        padding:1.5mm 2mm;}
+  .warn .wt{font-size:8.2pt; font-weight:700; color:var(--warn); margin-bottom:.9mm;}
+  .warn li{font-size:7.65pt;}
+
+  .ftr{margin-top:auto; padding-top:1.6mm; border-top:1.5px solid var(--ink);
+       display:flex; justify-content:space-between; gap:5mm;
+       font-size:7.1pt; color:var(--muted);}
+  .ftr .fin{color:var(--ink2); font-size:7.8pt; line-height:1.38;}
+  .ftr .fin b{color:var(--blue);}
+
+  @page{size:A4; margin:0;}
+  @media print{
+    html,body{background:#fff;}
+    .page{margin:0; box-shadow:none;}
+  }
+</style>
+</head>
+<body>
+<main class="page">
+
+  <div class="hdr">
+    <h1>Alpha191 微盘股策略 · 一页纸结论
+      <small>回测区间 2021-04-01 ~ 2026-09-01（1315 个交易日 / 66 轮调仓）· 初始资金 100 万 · 已扣全部交易成本</small>
+    </h1>
+    <div class="meta">
+      报告日期：2026-10-07<br>
+      数据截止：2026-10-06（全部实验完成）<br>
+      性质：全程序终局结论
+    </div>
+  </div>
+
+  <div class="verdict">
+    <b>一句话结论：</b><b>官方全窗口径（1315 交易日）：年化 +14.35%、★Sharpe 1.04、最大回撤 16.33%。</b>
+    在<b>同口径对照</b>下（同一股票池、同样平均仓位 42.8%、双方都不加杠杆、共同交易日 1282 天），本策略年化 <b>+14.12%</b>，
+    是对照组（<b>+6.26%</b>）的 <b>2.26 倍</b>，最大回撤反而低 <b>7.89pp</b>（<b>14.21%</b> vs <b>22.10%</b>）—— <b>收益与回撤同时占优</b>。
+    体检确认它<b>没有偷看未来</b>；9 个"改进"方向<b>无一通过统计显著性检验</b>。<span class="hl">最终建议：维持现状，一个参数都不改。</span>
+  </div>
+
+  <!-- ① -->
+  <section class="sec">
+    <div class="sec-h"><span class="no">1</span><h2>同口径对照：本策略 vs "同池等权" vs 沪深300</h2>
+      <span class="tag">统一到同一平均仓位 42.80%：策略保持原样，两条对照腿等比缩到同仓位 ⇒ 双方都不加杠杆、回撤可直接比</span></div>
+    <table>
+      <thead><tr><th style="width:31%">标的（同口径 · 共同交易日 1282 天）</th><th style="width:13%">年化</th>
+        <th style="width:14%">最大回撤</th><th style="width:12%">Sharpe</th><th style="width:30%">判定</th></tr></thead>
+      <tbody>
+        <tr><td><b>★本策略</b>（原样，仓位 42.80%）</td><td class="num up">+14.12%</td>
+            <td class="num up">14.21%</td><td class="num up">1.03</td>
+            <td class="ok">✅ 收益 · 回撤 · Sharpe 三项同时占优</td></tr>
+        <tr><td><b>同池等权对照</b>（同股票池 300 只，等权）</td><td class="num">+6.26%</td>
+            <td class="num">22.10%</td><td class="num">0.48</td>
+            <td>策略收益为其 <b>2.26 倍</b>，回撤低 <b>7.89pp</b></td></tr>
+        <tr><td><b>沪深300</b>（缩到同仓位）</td><td class="num down">−0.34%</td>
+            <td class="num">19.30%</td><td class="num">−0.04</td>
+            <td>策略年化超额 <b>+14.46pp</b></td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>★两套口径必须并列（勿混用）：</b>① <b>官方全窗（1315 交易日）</b>＝ 年化 <b>+14.35%</b>／|MaxDD| <b>16.33%</b>／★Sharpe <b>1.039</b>（权威口径，对外报业绩用这个）；② <b>同口径对照（共同交易日 1282 天）</b>＝ 年化 <b>+14.12%</b>（上表，用于与对照腿比）。
+      二者窗口相差 <b>33 个交易日</b>（2026-07-16~09-01，池缓存缺口），缺口内策略净值累计 <b>−0.62%</b>，且<b>全窗最险些（2026-07-24）正落在该缺口内</b> ⇒ <b>两套数字不可互相印证，引用时必须注明窗口</b>。
+      <b>超额来源（同口径分解）：</b>总超额 <b>+14.46pp</b> ≈ <b>① 小市值风格 +6.60pp（约 46%）</b> ＋ <b>② 池内选股 +7.86pp（约 54%）</b>（①+② 严格闭合）。
+      <b>★成本方向对我们有利：</b>本策略已扣全部成本（<b>11.4% / 5.4 年</b>），对照腿未计其日频换手成本 ⇒ <b>+14.46pp 是保守下界</b>。
+      <b>★独立佐证：</b>把选股换成<b>随机选股</b>跑 21 次：Sharpe 仅 0.37~0.78、回撤 16.5%~30.0%、资金效率 0.124~0.263，<b>四项 21/21 未达标</b>（p = 0.0455）。
+      <b>★口径更正（2026-10-08）：</b>本页 10-07 版曾记 14.89%／13.21%／1.08／+15.01pp —— 系<b>子窗口算法错误</b>（对「收益序列」按<b>非连续</b>共同交易日重取样后连乘，数学上不再望远镜相消，造出失真净值路径）。已按「<b>从净值序列取子集</b>」重算并更正。
+    </div>
+  </section>
+
+  <!-- ② -->
+  <section class="sec">
+    <div class="sec-h"><span class="no">2</span><h2>Z23 体检：模型有没有"偷看未来"？</h2>
+      <span class="tag">做法：把"标准答案"在同一天内随机打乱，其他一切不动，再让模型预测</span></div>
+    <table>
+      <thead><tr><th style="width:24%">检查项</th><th style="width:33%">结果</th><th style="width:43%">说明</th></tr></thead>
+      <tbody>
+        <tr><td><b>预测力（IC）</b></td><td class="num">0.298 → <b class="down">0.007 ~ 0.011</b></td>
+            <td><b>塌了 96% ~ 97%</b>：把答案打乱，模型就不会预测了</td></tr>
+        <tr><td><b>逐轮配对统计量</b></td><td class="num"><b>t ≈ 27 ~ 29</b></td>
+            <td>统计上极强（一般 t &gt; 2 即显著）⇒ 不是巧合</td></tr>
+        <tr><td><b>39 个逐轮数据点</b></td><td class="mid">39 / 39 全落在容忍带内</td>
+            <td>没有任何一个轮次出现异常高的预测力</td></tr>
+        <tr><td><b>打乱后的策略收益</b></td><td class="num">年化 <b class="down">0%</b> 或 <b class="down">−4.71%</b></td>
+            <td>原配置 +14.35% ⇒ <b>一分钱没赚，可交易信号归零</b></td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <b>结论：模型确实在"学真东西"，没有偷看未来</b> ⇒ 前面所有结论的可信度被加固，不需重跑历史实验。
+      <b>如实说明：</b>打乱后仍剩一个极小正数（约 0.007~0.011，仅原来的 2%~3.5%），区间估计上不能说是"零"；
+      最可能原因不在策略，而是训练/验证数据的时间切分<b>轻微重叠</b>（原配置同样存在，相对 0.30 可忽略），
+      <b>不影响任何结论</b>；已登记待查（追加约 1.5 小时对照探针即可定性，需批准）。
+    </div>
+  </section>
+
+  <!-- ③ -->
+  <section class="sec">
+    <div class="sec-h"><span class="no">3</span><h2>因子和模型都确实在起作用（都有可量化证据）</h2></div>
+    <div class="grid2">
+      <div class="card">
+        <h3>因子端（191 个 Alpha191 因子）</h3>
+        <ul>
+          <li>191 个因子 → <b>40 列</b>因子快照；严格时点纪律：<b>只用当天及以前数据</b>，信号 T−1 生成、T 日执行</li>
+          <li>预测力 IC：全窗 <b>0.277</b>／同窗基线 <b>0.298</b>（远高于 0）</li>
+          <li>股票池 <b>5440 只</b>，含 <b>237 只已退市股</b>（避免"只统计活下来的"）</li>
+          <li><b>关键证据：</b>标签打乱后 IC 立刻归零 ⇒ 预测力来自真实的<b>因子 ↔ 涨跌</b>对应关系，不是噪声</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>模型端（XGBoost 两层堆叠 + Purged K-Fold）</h3>
+        <ul>
+          <li>模型输出<b>真的在驱动交易</b>：IC 门控阈值 0.02 使仓位双峰（<b>&lt;20% 占 34.1%</b>、<b>&gt;80% 占 17.6%</b>）</li>
+          <li>贡献可量化：Sharpe <b>1.04</b>（随机 0.37~0.78）；最大回撤 <b>16.33%</b>（随机 16.51%~29.96%）</li>
+          <li>风控（IC 门控 ＋ 10% 单只上限 ＋ 可成交性检查）把回撤从"同池对照（同仓位）"的 <b>22.10%</b> 压到 <b>14.21%</b>（压低 <b>7.89pp</b>；同口径、无杠杆）</li>
+          <li><b>超额来源：</b>同口径下总超额 <b>+14.46pp</b> ≈ <b>小市值风格 +6.60pp（约 46%）</b>＋<b>池内选股 +7.86pp（约 54%）</b>。<b>注意：约 46% 的收益来自"买小市值"本身，微盘风格逆转会直接冲击这部分</b></li>
+        </ul>
+      </div>
+    </div>
+    <div class="note"><b>成本已如实扣除：</b>全窗交易费用 <b>11.4 万元 / 100 万本金 = 11.4%</b>（佣金万3 + 印花万5 + 过户费 + 滑点 0.1%）。</div>
+  </section>
+
+  <!-- ④ -->
+  <section class="sec">
+    <div class="sec-h"><span class="no">4</span><h2>怎么保证不是"拟合出来的运气"？—— 7 道防线</h2>
+      <span class="tag">针对"最终模型与参数"的防过拟合设计</span></div>
+    <ol class="def">
+      <li><b>严格时点纪律（PIT）</b>：因子只用当天及以前数据；快照区间右侧封闭；信号滞后 1 日执行 ⇒ <b>机制上杜绝"用未来数据做决定"</b></li>
+      <li><b>抗幸存者偏差</b>：股票池含 <b>237 只已退市股票</b>，不用"今天还活着的股票"倒推历史</li>
+      <li><b>独立对照实验</b>：① 21 次"随机选股"对照（唯一变量 = 选股集合）② Z23 标签置换体检</li>
+      <li><b>"噪声地板"门槛</b>：先量出 21 次随机选股的天然波动（Sharpe 的 σ = <b>0.124</b>、<b>2σ = 0.248</b>）；改进幅度小于它、或置信区间跨过 0，一律判"<b>测不出来</b>"，<b>不许说"有效"</b></li>
+      <li><b>多重比较校正</b>：一次测 5~9 个档位时最好的那个往往是噪声；校正后该档位 p 值从 0.0945 掉到 <b>0.2900</b> ⇒ <b>直接不采纳</b></li>
+      <li><b>区分"没用"与"测不出来"</b>：3 个方向<b>确凿变差</b>（关闭）；9 个属"<b>测不出可辨识改善</b>"（收口）；<b>0 个达采纳门槛</b></li>
+      <li><b>结论冻结、一次跑定</b>：终验结论冻结后<b>不回溯调参</b>；换股票池时数值参数<b>全部作废、须重新标定</b></li>
+    </ol>
+    <div class="res">
+      <b>结果：</b>9 个改进方向全部"测不出来"、3 个确凿变差、<b>0 个通过门槛</b> ⇒ <b>维持现行配置不改</b>。
+      3 个"看起来最好"的候选（Sharpe 最高 1.24）<b>一律不采纳</b> —— 按校正后它们不显著，<b>采纳等于把噪声当能力</b>。
+      这也说明参数不是"调出来的最好"，而是"<b>在能分辨的范围内找不到更好的</b>"。
+    </div>
+  </section>
+
+  <!-- 风险 -->
+  <section class="sec">
+    <div class="warn">
+      <div class="wt">⚠ 必须如实披露的四个风险（对外汇报请一并说明）</div>
+      <ul>
+        <li><b>"回撤 16.33% 达标"依赖低仓位</b>：满仓等效回撤为 <b>34.70%</b>，已超 20% 线；而两者收益效率<b>完全一样</b>（Sharpe 一字不差）⇒ <b>轻仓只等比压缩波动，不创造能力</b>。<b>「满仓等效」是"度量尺子"，不是可交易策略、也不是加杠杆建议</b> —— 它只是把每日收益乘一个常数（2.34 ＝ 1 ÷ 平均仓位 42.80%），<b>不改变任何买卖决定</b>。对外只报 16.33% 不完整，须同时给出"满仓等效 34.70% + 平均仓位 42.80%"。</li>
+        <li><b>约 46% 的超额来自"小市值风格"本身</b>（2026-10-08 更正口径）：同口径下总超额 +14.46pp ≈ 小市值 <b>+6.60pp（45.6%）</b>＋池内选股 <b>+7.86pp（54.4%）</b>。⇒ <b>微盘风格一旦逆转，会直接冲击约四成半的收益来源</b>。</li>
+        <li><b>没有尾部熔断、没有换手限制</b>：极端行情下的回撤控制完全靠 <b>选股质量 + 平均 42.8% 的仓位 + 单只不超 10%</b>，<b>不依赖风控层</b>。</li>
+        <li><b>能力在衰减</b>：预测力 IC 从 <b>0.308 → 0.205</b>；超额 <b>2025 年 +1.63% / 2026 年 −4.63%</b>。<b>建议每季度监控</b>：IC 连续两季低于 0.15 或年度超额为负 ⇒ 触发一次全链复核。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="ftr">
+    <div class="fin">
+      <b>行动建议：</b>维持现行配置，不做任何参数改动。
+      唯一值得继续的方向 = <b>"样本权重与标签的对齐结构"</b>（"是否对齐"的效应比"权重加多大"大一个量级：0.195 vs ≤0.086）。
+      待批：Z23 残差机制探针（≈1.5 小时）；8/190 个因子恒为 NaN 的供给缺口。
+    </div>
+    <div style="text-align:right; white-space:nowrap;">数据来源：<br>全实验总报告 · Z23 体检档<br>Q5E 终验档 · Z21 基准审计档</div>
+  </div>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,7 @@
+﻿python = 4   tee = 2
+  pid=7140 started=17:43:14 cpu=0s
+  pid=13700 started=17:43:14 cpu=58,055s
+  pid=33788 started=17:43:09 cpu=0s
+  pid=35000 started=17:43:09 cpu=57,913s
+  tee pid=10864 started=17:43:14
+  tee pid=34908 started=17:43:09

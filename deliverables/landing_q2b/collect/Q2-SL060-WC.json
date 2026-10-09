@@ -1,0 +1,485 @@
+{
+ "arm": {
+  "label": "Q2-SL060-WC",
+  "run_dir": "results/SmallAlpha191Test3_Q2_SL060_WC_o3_20260913",
+  "window": "WC",
+  "period": "2024-04-01 to 2024-10-01",
+  "sharpe": -0.531845884814851,
+  "calmar_full": -0.5537367614162417,
+  "calmar_rounded": -0.5534913516976298,
+  "annual_return": -0.08643750955372786,
+  "total_return": -0.0431661487671251,
+  "max_drawdown": -0.15609855725065927,
+  "mdd_date": "2024-07-17",
+  "annual_volatility": 0.16252360321227072,
+  "nav_full": -0.06222210257009497,
+  "nav_mdd": -0.1560985572506589,
+  "total_orders": 786,
+  "n_days": 123,
+  "avg_exposure": 0.38343188514330256,
+  "exposure_mean_of_ratio": 0.3776155655027197,
+  "unit_exposure_return": -0.2254311988723186,
+  "unit_exposure_mdd": 0.4071089632838425,
+  "valley": [
+   {
+    "valley_date": "2024-07-17",
+    "in_window": true,
+    "pos_value": 129145.20999999996,
+    "total_value_eod": 866372.2427455139,
+    "clear_ratio": 0.1490643439715263,
+    "cash_ratio": 0.8509356560284737,
+    "dd_at_valley": -0.1560985572506589,
+    "rebound_day": "2024-08-14",
+    "rebound_pct": 0.04120693170267664
+   }
+  ],
+  "min_exposure_day": {
+   "date": "2024-07-25",
+   "clear_ratio": 0.04048431903930585,
+   "pos_value": 35136.619999999995,
+   "total_value_eod": 867906.9040505826
+  },
+  "triggers": {
+   "sell_total": 646,
+   "buy_new_open": 140,
+   "pt_total": 189,
+   "sl_total": 343,
+   "pt_ratio": 0.29256965944272445,
+   "sl_ratio": 0.5309597523219814,
+   "by_reason_sell": {
+    "default": 114,
+    "stage1_pt": 56,
+    "stage1_sl": 78,
+    "stage2_pt": 56,
+    "stage2_sl": 78,
+    "stage3_pt": 47,
+    "stage3_sl": 85,
+    "stage4_pt": 30,
+    "stage4_sl": 102
+   },
+   "by_reason_buy": {
+    "new_open": 140
+   }
+  },
+  "holding": {
+   "episodes": 140,
+   "avg_holding_days": 24.3,
+   "max_holding_days": 30,
+   "caliber": "单期持有期 = max(holding_days)+1（含建仓日）；按 holding_days==0 断新期"
+  },
+  "valley_kind": "策略自身 MaxDD 日",
+  "exposure_dist": {
+   "n_days": 123,
+   "mean": 0.3776155655027197,
+   "median": 0.24856167916515062,
+   "p10": 0.050987300264729925,
+   "p25": 0.07173846485286944,
+   "p75": 0.6606279709212173,
+   "p90": 0.9124256796142818,
+   "min": 0.04048431903930585,
+   "max": 0.9910945491293193,
+   "zero_days": 0,
+   "zero_ratio": 0.0,
+   "low_days": 45,
+   "low_ratio": 0.36585365853658536,
+   "high_days": 14,
+   "high_ratio": 0.11382113821138211,
+   "thr": {
+    "zero": 0.01,
+    "low": 0.1,
+    "high": 0.9
+   },
+   "percentile_method": "linear ((n-1)*q 线性插值)",
+   "caliber": "逐日敞口 = position_value/total_value_eod（缺失退回 total_value）；★与 §3 权威口径 Σpos/Σtv **不同源**，禁止混用做跨臂比较"
+  },
+  "benchmark_name": "sh.000300",
+  "segments": {
+   "equal": [
+    {
+     "kind": "equal",
+     "label": "EQ1",
+     "start": "2024-04-01",
+     "end": "2024-06-03",
+     "n_days": 41,
+     "ret": -0.06862791000162927,
+     "tv_base": 1000000.0,
+     "tv_end": 931372.0899983707,
+     "expo_mean": 0.5375656072233445,
+     "expo_min": 0.04537783401590187,
+     "expo_max": 0.9875733446141907,
+     "pt_n": 24,
+     "pt_pnl": 34766.14369827356,
+     "sl_n": 108,
+     "sl_pnl": -71374.54992902173,
+     "other_n": 37,
+     "other_pnl": -10597.43371015995,
+     "bench_ret": -0.0019189854407408724,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    },
+    {
+     "kind": "equal",
+     "label": "EQ2",
+     "start": "2024-06-04",
+     "end": "2024-07-31",
+     "n_days": 41,
+     "ret": -0.03400436840434351,
+     "tv_base": 931372.0899983707,
+     "tv_end": 899701.3703285428,
+     "expo_mean": 0.22269101432995542,
+     "expo_min": 0.04048431903930585,
+     "expo_max": 0.9910945491293193,
+     "pt_n": 26,
+     "pt_pnl": 27913.336853134446,
+     "sl_n": 146,
+     "sl_pnl": -96136.42555985192,
+     "other_n": 39,
+     "other_pnl": -4993.479883044289,
+     "bench_ret": -0.040869383490073186,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    },
+    {
+     "kind": "equal",
+     "label": "EQ3",
+     "start": "2024-08-01",
+     "end": "2024-09-30",
+     "n_days": 41,
+     "ret": 0.06350160485302925,
+     "tv_base": 899701.3703285428,
+     "tv_end": 956833.8512328749,
+     "expo_mean": 0.37259007495485924,
+     "expo_min": 0.04463409162153799,
+     "expo_max": 0.9844159238870862,
+     "pt_n": 139,
+     "pt_pnl": 98463.28423585823,
+     "sl_n": 89,
+     "sl_pnl": -25309.826180241816,
+     "other_n": 38,
+     "other_pnl": -2060.7601396935916,
+     "bench_ret": 0.16727385766745684,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    }
+   ],
+   "flat": [
+    {
+     "kind": "flat",
+     "label": "FLAT1",
+     "start": "2024-04-16",
+     "end": "2024-04-23",
+     "n_days": 6,
+     "ret": -0.0010852628359067085,
+     "tv_base": 957823.7784020713,
+     "tv_end": 956784.2878520238,
+     "expo_mean": 0.04844057330138254,
+     "expo_min": 0.04537783401590187,
+     "expo_max": 0.04967054810932478,
+     "pt_n": 0,
+     "pt_pnl": 0.0,
+     "sl_n": 4,
+     "sl_pnl": -3107.8285500473685,
+     "other_n": 0,
+     "other_pnl": 0.0,
+     "bench_ret": -0.012076369087200112,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1",
+     "rebal_days_in_seg": [],
+     "rebal_first_holdings": null,
+     "cause": "调仓日跳过（风控空仓平台候选）",
+     "cause_code": "platform"
+    }
+   ],
+   "params": {
+    "n_segments": 3,
+    "flat_thresh": 0.05,
+    "flat_min_days": 5,
+    "benchmark_name": "sh.000300"
+   },
+   "caliber": "等分段边界 = n*k//N（余数并入末段）；段收益基数 = 段首日前一交易日 total_value（首段 = initial_cash）⇒ 等分段收益连乘恒等于全窗总收益"
+  },
+  "rebalance": {
+   "n_rebalance_days": 7,
+   "zero_holdings_days": [],
+   "days": [
+    {
+     "date": "2024-04-01",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-05-06",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-06-03",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-07-02",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-07-30",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-08-27",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-09-26",
+     "holdings": 20,
+     "staged": 20
+    }
+   ]
+  },
+  "flat_causes": {
+   "available": true,
+   "n_rebalance_days": 7,
+   "zero_holdings_days": [],
+   "items": [
+    {
+     "seg": "FLAT1",
+     "start": "2024-04-16",
+     "end": "2024-04-23",
+     "n_days": 6,
+     "first_is_rebalance": false,
+     "first_holdings": null,
+     "rebal_days_in_seg": [],
+     "cause": "调仓日跳过（风控空仓平台候选）",
+     "cause_code": "platform",
+     "idx0": 9
+    }
+   ],
+   "disclaimer": "★启发式候选判定，**非因果证明**；因果归属须辅以日志逐字核验 （如 `[date] 调仓完成，持仓数: 0` 行）。"
+  },
+  "cross_impl_exposure_delta": 1.6653345369377348e-16
+ },
+ "base": {
+  "label": "Q2-SL060-WC-BASE",
+  "run_dir": "results/SmallAlpha191Test3_Q1_base_WC_o3_20260913",
+  "window": "WC",
+  "period": "2024-04-01 to 2024-10-01",
+  "sharpe": -1.220893472299864,
+  "calmar_full": -1.1287776421988676,
+  "calmar_rounded": -1.1286707882534777,
+  "annual_return": -0.29213327155414626,
+  "total_return": -0.1551841727224309,
+  "max_drawdown": -0.25880497684651904,
+  "mdd_date": "2024-08-05",
+  "annual_volatility": 0.2392782647972053,
+  "nav_full": -0.17113217852841767,
+  "nav_mdd": -0.25880497684651904,
+  "total_orders": 630,
+  "n_days": 123,
+  "avg_exposure": 0.6285912004518113,
+  "exposure_mean_of_ratio": 0.627432468833613,
+  "unit_exposure_return": -0.4647428588630738,
+  "unit_exposure_mdd": 0.4117222396058015,
+  "valley": [
+   {
+    "valley_date": "2024-08-05",
+    "in_window": true,
+    "pos_value": 631047.73,
+    "total_value_eod": 755456.1420272163,
+    "clear_ratio": 0.8353201395737222,
+    "cash_ratio": 0.16467986042627777,
+    "dd_at_valley": -0.25880497684651904,
+    "rebound_day": "2024-09-02",
+    "rebound_pct": 0.03780598462593532
+   }
+  ],
+  "min_exposure_day": {
+   "date": "2024-09-30",
+   "clear_ratio": 0.07621187709927449,
+   "pos_value": 64385.0,
+   "total_value_eod": 844815.8272775691
+  },
+  "triggers": {
+   "sell_total": 490,
+   "buy_new_open": 140,
+   "pt_total": 171,
+   "sl_total": 202,
+   "pt_ratio": 0.3489795918367347,
+   "sl_ratio": 0.4122448979591837,
+   "by_reason_sell": {
+    "default": 117,
+    "stage1_pt": 52,
+    "stage1_sl": 50,
+    "stage2_pt": 52,
+    "stage2_sl": 50,
+    "stage3_pt": 40,
+    "stage3_sl": 45,
+    "stage4_pt": 27,
+    "stage4_sl": 57
+   },
+   "by_reason_buy": {
+    "new_open": 140
+   }
+  },
+  "holding": {
+   "episodes": 140,
+   "avg_holding_days": 24.757142857142856,
+   "max_holding_days": 30,
+   "caliber": "单期持有期 = max(holding_days)+1（含建仓日）；按 holding_days==0 断新期"
+  },
+  "valley_kind": "策略自身 MaxDD 日",
+  "exposure_dist": {
+   "n_days": 123,
+   "mean": 0.627432468833613,
+   "median": 0.6764242255879845,
+   "p10": 0.17568968815845112,
+   "p25": 0.4627006571849503,
+   "p75": 0.8220419987105212,
+   "p90": 0.9486762966769307,
+   "min": 0.07621187709927449,
+   "max": 0.9906648862905126,
+   "zero_days": 0,
+   "zero_ratio": 0.0,
+   "low_days": 1,
+   "low_ratio": 0.008130081300813009,
+   "high_days": 20,
+   "high_ratio": 0.16260162601626016,
+   "thr": {
+    "zero": 0.01,
+    "low": 0.1,
+    "high": 0.9
+   },
+   "percentile_method": "linear ((n-1)*q 线性插值)",
+   "caliber": "逐日敞口 = position_value/total_value_eod（缺失退回 total_value）；★与 §3 权威口径 Σpos/Σtv **不同源**，禁止混用做跨臂比较"
+  },
+  "benchmark_name": "sh.000300",
+  "segments": {
+   "equal": [
+    {
+     "kind": "equal",
+     "label": "EQ1",
+     "start": "2024-04-01",
+     "end": "2024-06-03",
+     "n_days": 41,
+     "ret": -0.09092774055264397,
+     "tv_base": 1000000.0,
+     "tv_end": 909072.259447356,
+     "expo_mean": 0.6149029549534961,
+     "expo_min": 0.1576569846549023,
+     "expo_max": 0.9906648862905126,
+     "pt_n": 29,
+     "pt_pnl": 48449.94215902828,
+     "sl_n": 73,
+     "sl_pnl": -96517.38595397458,
+     "other_n": 39,
+     "other_pnl": -18259.819498987898,
+     "bench_ret": -0.0019189854407408724,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    },
+    {
+     "kind": "equal",
+     "label": "EQ2",
+     "start": "2024-06-04",
+     "end": "2024-07-31",
+     "n_days": 41,
+     "ret": -0.13642059419061037,
+     "tv_base": 909072.259447356,
+     "tv_end": 785056.081651347,
+     "expo_mean": 0.6506015928328548,
+     "expo_min": 0.3453609823478597,
+     "expo_max": 0.9879230741624587,
+     "pt_n": 5,
+     "pt_pnl": 7991.000895002242,
+     "sl_n": 75,
+     "sl_pnl": -104538.05063369278,
+     "other_n": 39,
+     "other_pnl": -72986.20651154079,
+     "bench_ret": -0.040869383490073186,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    },
+    {
+     "kind": "equal",
+     "label": "EQ3",
+     "start": "2024-08-01",
+     "end": "2024-09-30",
+     "n_days": 41,
+     "ret": 0.07612162624168062,
+     "tv_base": 785056.081651347,
+     "tv_end": 844815.8272775691,
+     "expo_mean": 0.6167928587144884,
+     "expo_min": 0.07621187709927449,
+     "expo_max": 0.9848094969920415,
+     "pt_n": 137,
+     "pt_pnl": 95810.23054660417,
+     "sl_n": 54,
+     "sl_pnl": -22419.41606891091,
+     "other_n": 39,
+     "other_pnl": -1000.3020156419421,
+     "bench_ret": 0.16727385766745684,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    }
+   ],
+   "flat": [],
+   "params": {
+    "n_segments": 3,
+    "flat_thresh": 0.05,
+    "flat_min_days": 5,
+    "benchmark_name": "sh.000300"
+   },
+   "caliber": "等分段边界 = n*k//N（余数并入末段）；段收益基数 = 段首日前一交易日 total_value（首段 = initial_cash）⇒ 等分段收益连乘恒等于全窗总收益"
+  },
+  "rebalance": {
+   "n_rebalance_days": 7,
+   "zero_holdings_days": [],
+   "days": [
+    {
+     "date": "2024-04-01",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-05-06",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-06-03",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-07-02",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-07-30",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-08-27",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2024-09-26",
+     "holdings": 20,
+     "staged": 20
+    }
+   ]
+  },
+  "flat_causes": null,
+  "cross_impl_exposure_delta": 1.1102230246251565e-16
+ },
+ "compare": {
+  "d_calmar_rel": -0.5094368095938202,
+  "d_calmar_abs": 0.5750408807826258,
+  "d_sharpe": 0.6890475874850129,
+  "mdd_worsen_pp": -10.270641959585976,
+  "g1_calmar_ge_10pct": false,
+  "g2_sharpe_positive": true,
+  "g3_mdd_worsen_le_1pp": true,
+  "conj_3_of_3": false,
+  "mdd_abs_arm": 0.15609855725065927,
+  "mdd_cap_note": "|MaxDD|<20% 仅 Q5 验收检查（禁作 Q1/Q2 搜索约束）"
+ }
+}

@@ -1,0 +1,14 @@
+# 排除 data 目录下的所有数据文件
+/data/*
+!/data/.gitkeep
+/results/*
+!/results/.gitkeep
+# 如果是 Python 项目，建议同时加上
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.idea/
+.vscode/

@@ -1,0 +1,431 @@
+{
+ "arm": {
+  "label": "Q2-SL050-WX",
+  "run_dir": "results/SmallAlpha191Test3_Q2_SL050_WX_o3_20260913",
+  "window": "WX",
+  "period": "2022-01-01 to 2022-07-01",
+  "sharpe": 0.26413113306329716,
+  "calmar_full": 0.3086263557587196,
+  "calmar_rounded": 0.30844444444444447,
+  "annual_return": 0.034717031556232625,
+  "total_return": 0.016108938851353338,
+  "max_drawdown": -0.11248887500513399,
+  "mdd_date": "2022-04-28",
+  "annual_volatility": 0.13143861972497173,
+  "nav_full": -0.0052945700936718465,
+  "nav_mdd": -0.11248887500513416,
+  "total_orders": 649,
+  "n_days": 118,
+  "avg_exposure": 0.3442434311175154,
+  "exposure_mean_of_ratio": 0.3400362434522946,
+  "unit_exposure_return": 0.10085023683249651,
+  "unit_exposure_mdd": 0.32677130436436225,
+  "valley": [
+   {
+    "valley_date": "2022-04-28",
+    "in_window": true,
+    "pos_value": 48924.07999999996,
+    "total_value_eod": 931683.4531168066,
+    "clear_ratio": 0.0525114832042276,
+    "cash_ratio": 0.9474885167957724,
+    "dd_at_valley": -0.11248887500513416,
+    "rebound_day": "2022-05-31",
+    "rebound_pct": 0.0925984808456144
+   }
+  ],
+  "min_exposure_day": {
+   "date": "2022-03-15",
+   "clear_ratio": 0.04853099871837926,
+   "pos_value": 47438.83999999997,
+   "total_value_eod": 977495.6471694106
+  },
+  "triggers": {
+   "sell_total": 529,
+   "buy_new_open": 120,
+   "pt_total": 139,
+   "sl_total": 293,
+   "pt_ratio": 0.2627599243856333,
+   "sl_ratio": 0.553875236294896,
+   "by_reason_sell": {
+    "default": 97,
+    "stage1_pt": 44,
+    "stage1_sl": 67,
+    "stage2_pt": 44,
+    "stage2_sl": 69,
+    "stage3_pt": 36,
+    "stage3_sl": 71,
+    "stage4_pt": 15,
+    "stage4_sl": 86
+   },
+   "by_reason_buy": {
+    "new_open": 120
+   }
+  },
+  "holding": {
+   "episodes": 120,
+   "avg_holding_days": 29.191666666666666,
+   "max_holding_days": 35,
+   "caliber": "单期持有期 = max(holding_days)+1（含建仓日）；按 holding_days==0 断新期"
+  },
+  "valley_kind": "★预注册压力谷底日（D-149）",
+  "exposure_dist": {
+   "n_days": 118,
+   "mean": 0.3400362434522946,
+   "median": 0.2885282716648258,
+   "p10": 0.051991299041496686,
+   "p25": 0.06422169543460621,
+   "p75": 0.5436493435352184,
+   "p90": 0.7638246074760138,
+   "min": 0.04853099871837926,
+   "max": 0.9848186502643851,
+   "zero_days": 0,
+   "zero_ratio": 0.0,
+   "low_days": 38,
+   "low_ratio": 0.3220338983050847,
+   "high_days": 8,
+   "high_ratio": 0.06779661016949153,
+   "thr": {
+    "zero": 0.01,
+    "low": 0.1,
+    "high": 0.9
+   },
+   "percentile_method": "linear ((n-1)*q 线性插值)",
+   "caliber": "逐日敞口 = position_value/total_value_eod（缺失退回 total_value）；★与 §3 权威口径 Σpos/Σtv **不同源**，禁止混用做跨臂比较"
+  },
+  "benchmark_name": "sh.000300",
+  "segments": {
+   "equal": [
+    {
+     "kind": "equal",
+     "label": "EQ1",
+     "start": "2022-01-04",
+     "end": "2022-03-04",
+     "n_days": 39,
+     "ret": 0.03268684976366876,
+     "tv_base": 1000000.0,
+     "tv_end": 1032686.8497636688,
+     "expo_mean": 0.48461626062832264,
+     "expo_min": 0.0933539277804608,
+     "expo_max": 0.980841751839842,
+     "pt_n": 68,
+     "pt_pnl": 59087.717780512,
+     "sl_n": 59,
+     "sl_pnl": -13123.006272112249,
+     "other_n": 19,
+     "other_pnl": -8984.741232208993,
+     "bench_ret": -0.08567704467675397,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    },
+    {
+     "kind": "equal",
+     "label": "EQ2",
+     "start": "2022-03-07",
+     "end": "2022-05-05",
+     "n_days": 39,
+     "ret": -0.09467548334641529,
+     "tv_base": 1032686.8497636688,
+     "tv_end": 934916.7231168066,
+     "expo_mean": 0.12487353995512666,
+     "expo_min": 0.04853099871837926,
+     "expo_max": 0.9848186502643851,
+     "pt_n": 4,
+     "pt_pnl": 3943.003603086042,
+     "sl_n": 163,
+     "sl_pnl": -84039.63907413749,
+     "other_n": 38,
+     "other_pnl": -7984.482718067547,
+     "bench_ret": -0.10813467573163593,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    },
+    {
+     "kind": "equal",
+     "label": "EQ3",
+     "start": "2022-05-06",
+     "end": "2022-07-01",
+     "n_days": 40,
+     "ret": 0.08684432926161567,
+     "tv_base": 934916.7231168066,
+     "tv_end": 1016108.9388513534,
+     "expo_mean": 0.4088543626154061,
+     "expo_min": 0.055757840740768325,
+     "expo_max": 0.9807728844064048,
+     "pt_n": 67,
+     "pt_pnl": 82029.97692307772,
+     "sl_n": 71,
+     "sl_pnl": -26550.887924453207,
+     "other_n": 40,
+     "other_pnl": 8875.909268686632,
+     "bench_ret": 0.11383693123302785,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    }
+   ],
+   "flat": [],
+   "params": {
+    "n_segments": 3,
+    "flat_thresh": 0.05,
+    "flat_min_days": 5,
+    "benchmark_name": "sh.000300"
+   },
+   "caliber": "等分段边界 = n*k//N（余数并入末段）；段收益基数 = 段首日前一交易日 total_value（首段 = initial_cash）⇒ 等分段收益连乘恒等于全窗总收益"
+  },
+  "rebalance": {
+   "n_rebalance_days": 6,
+   "zero_holdings_days": [],
+   "days": [
+    {
+     "date": "2022-01-04",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2022-02-08",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2022-03-08",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2022-04-07",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2022-05-10",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2022-06-08",
+     "holdings": 20,
+     "staged": 20
+    }
+   ]
+  },
+  "flat_causes": null,
+  "cross_impl_exposure_delta": 5.551115123125783e-17
+ },
+ "base": {
+  "label": "Q2-SL050-WX-BASE",
+  "run_dir": "results/SmallAlpha191Test3_Q1_base_WX_o3_20260913",
+  "window": "WX",
+  "period": "2022-01-01 to 2022-07-01",
+  "sharpe": -0.5069595350157297,
+  "calmar_full": -0.5726541736743079,
+  "calmar_rounded": -0.5723199092456042,
+  "annual_return": -0.10093583982423471,
+  "total_return": -0.04860184445950244,
+  "max_drawdown": -0.17625967724395053,
+  "mdd_date": "2022-04-28",
+  "annual_volatility": 0.19910038741278024,
+  "nav_full": -0.05895949176668125,
+  "nav_mdd": -0.17625967724395009,
+  "total_orders": 523,
+  "n_days": 118,
+  "avg_exposure": 0.5912334616918208,
+  "exposure_mean_of_ratio": 0.5873438165013607,
+  "unit_exposure_return": -0.17072078352163245,
+  "unit_exposure_mdd": 0.29812195801567387,
+  "valley": [
+   {
+    "valley_date": "2022-04-28",
+    "in_window": true,
+    "pos_value": 83803.34999999998,
+    "total_value_eod": 850913.4442199195,
+    "clear_ratio": 0.09848633908567192,
+    "cash_ratio": 0.901513660914328,
+    "dd_at_valley": -0.17625967724395009,
+    "rebound_day": "2022-05-31",
+    "rebound_pct": 0.1011048693255201
+   }
+  ],
+  "min_exposure_day": {
+   "date": "2022-04-28",
+   "clear_ratio": 0.09848633908567192,
+   "pos_value": 83803.34999999998,
+   "total_value_eod": 850913.4442199195
+  },
+  "triggers": {
+   "sell_total": 403,
+   "buy_new_open": 120,
+   "pt_total": 129,
+   "sl_total": 180,
+   "pt_ratio": 0.3200992555831266,
+   "sl_ratio": 0.4466501240694789,
+   "by_reason_sell": {
+    "default": 92,
+    "orphan_cleanup": 2,
+    "stage1_pt": 41,
+    "stage1_sl": 40,
+    "stage2_pt": 43,
+    "stage2_sl": 43,
+    "stage3_pt": 34,
+    "stage3_sl": 39,
+    "stage4_pt": 11,
+    "stage4_sl": 58
+   },
+   "by_reason_buy": {
+    "new_open": 120
+   }
+  },
+  "holding": {
+   "episodes": 120,
+   "avg_holding_days": 28.933333333333334,
+   "max_holding_days": 35,
+   "caliber": "单期持有期 = max(holding_days)+1（含建仓日）；按 holding_days==0 断新期"
+  },
+  "valley_kind": "★预注册压力谷底日（D-149）",
+  "exposure_dist": {
+   "n_days": 118,
+   "mean": 0.5873438165013607,
+   "median": 0.5301338193974132,
+   "p10": 0.2931882584506885,
+   "p25": 0.43018307078804596,
+   "p75": 0.8221702536033061,
+   "p90": 0.9174504131278431,
+   "min": 0.09848633908567192,
+   "max": 0.9898445763116841,
+   "zero_days": 0,
+   "zero_ratio": 0.0,
+   "low_days": 2,
+   "low_ratio": 0.01694915254237288,
+   "high_days": 15,
+   "high_ratio": 0.1271186440677966,
+   "thr": {
+    "zero": 0.01,
+    "low": 0.1,
+    "high": 0.9
+   },
+   "percentile_method": "linear ((n-1)*q 线性插值)",
+   "caliber": "逐日敞口 = position_value/total_value_eod（缺失退回 total_value）；★与 §3 权威口径 Σpos/Σtv **不同源**，禁止混用做跨臂比较"
+  },
+  "benchmark_name": "sh.000300",
+  "segments": {
+   "equal": [
+    {
+     "kind": "equal",
+     "label": "EQ1",
+     "start": "2022-01-04",
+     "end": "2022-03-04",
+     "n_days": 39,
+     "ret": 0.022131214906595975,
+     "tv_base": 1000000.0,
+     "tv_end": 1022131.214906596,
+     "expo_mean": 0.5866090596280495,
+     "expo_min": 0.2881703189626942,
+     "expo_max": 0.9898445763116841,
+     "pt_n": 57,
+     "pt_pnl": 64282.967883799414,
+     "sl_n": 48,
+     "sl_pnl": -19516.034503769228,
+     "other_n": 19,
+     "other_pnl": -30411.65637906637,
+     "bench_ret": -0.08567704467675397,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    },
+    {
+     "kind": "equal",
+     "label": "EQ2",
+     "start": "2022-03-07",
+     "end": "2022-05-05",
+     "n_days": 39,
+     "ret": -0.16089543914545723,
+     "tv_base": 1022131.214906596,
+     "tv_end": 857674.9642199195,
+     "expo_mean": 0.46408421562572355,
+     "expo_min": 0.09848633908567192,
+     "expo_max": 0.9876437722587418,
+     "pt_n": 18,
+     "pt_pnl": 23876.39444382194,
+     "sl_n": 115,
+     "sl_pnl": -134478.3601079538,
+     "other_n": 39,
+     "other_pnl": -31958.91122794932,
+     "bench_ret": -0.10813467573163593,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    },
+    {
+     "kind": "equal",
+     "label": "EQ3",
+     "start": "2022-05-06",
+     "end": "2022-07-01",
+     "n_days": 40,
+     "ret": 0.10927588565654589,
+     "tv_base": 857674.9642199195,
+     "tv_end": 951398.1555404975,
+     "expo_mean": 0.7082383153065853,
+     "expo_min": 0.10458793553767784,
+     "expo_max": 0.9893808959599467,
+     "pt_n": 54,
+     "pt_pnl": 82721.5112079999,
+     "sl_n": 17,
+     "sl_pnl": -1171.7694700208237,
+     "other_n": 36,
+     "other_pnl": 20403.209939012664,
+     "bench_ret": 0.11383693123302785,
+     "bench_caliber": "benchmark_cumulative（百分数）差分： (1+bm1/100)/(1+bm0/100)−1"
+    }
+   ],
+   "flat": [],
+   "params": {
+    "n_segments": 3,
+    "flat_thresh": 0.05,
+    "flat_min_days": 5,
+    "benchmark_name": "sh.000300"
+   },
+   "caliber": "等分段边界 = n*k//N（余数并入末段）；段收益基数 = 段首日前一交易日 total_value（首段 = initial_cash）⇒ 等分段收益连乘恒等于全窗总收益"
+  },
+  "rebalance": {
+   "n_rebalance_days": 6,
+   "zero_holdings_days": [],
+   "days": [
+    {
+     "date": "2022-01-04",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2022-02-08",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2022-03-08",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2022-04-07",
+     "holdings": 20,
+     "staged": 20
+    },
+    {
+     "date": "2022-05-10",
+     "holdings": 22,
+     "staged": 22
+    },
+    {
+     "date": "2022-06-08",
+     "holdings": 20,
+     "staged": 20
+    }
+   ]
+  },
+  "flat_causes": null,
+  "cross_impl_exposure_delta": 1.1102230246251565e-16
+ },
+ "compare": {
+  "d_calmar_rel": -1.538940201515493,
+  "d_calmar_abs": 0.8812805294330275,
+  "d_sharpe": 0.7710906680790268,
+  "mdd_worsen_pp": -6.377080223881654,
+  "g1_calmar_ge_10pct": false,
+  "g2_sharpe_positive": true,
+  "g3_mdd_worsen_le_1pp": true,
+  "conj_3_of_3": false,
+  "mdd_abs_arm": 0.11248887500513399,
+  "mdd_cap_note": "|MaxDD|<20% 仅 Q5 验收检查（禁作 Q1/Q2 搜索约束）"
+ }
+}

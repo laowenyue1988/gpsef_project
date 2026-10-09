@@ -1,0 +1,95 @@
+# strategies/fundamental_ml/config.yaml
+
+strategy:
+  name: "FundamentalML"
+  class: "strategies.fundamental_ml.strategy.FundamentalMLStrategy"
+
+backtest:
+  start_date: "20210508"
+  end_date: "20260508"
+  initial_cash: 100000000.0
+  benchmark_code: "sh.000300"
+
+data:
+  base_path: "./data"
+  reference_date: "20260508"
+  stock_pool:
+    type: "dynamic"
+    filters:
+      - "st"
+      - "new_stock"
+      - "price_min:3"
+      - "amount_pct:0.1"
+
+execution:
+  commission_rate: 0.00025
+  tax_rate: 0.001
+  slippage: 0.001
+  max_positions: 60                   # 【v5优化】300 → 60，集中持仓
+  max_position_pct: 0.05              # 【v6新增】单只最大权重5%（用于softmax加权）
+
+# ============================================================
+# 策略参数
+# ============================================================
+rebalance_interval: 20                # 【v6优化】40 → 20，半预测窗口调仓捕捉信号衰减
+train_window_days: 200                 # 【v5优化】120 → 200，增加训练数据量
+pred_days: 40                          # 【v5优化】60 → 40，缩短预测窗口
+top_n: 60
+quantile_lookback: 252
+
+# ============================================================
+# 【v6优化】模型置信度门控三档阈值
+# ============================================================
+# IC >= 0.10: 正常交易，使用全部目标持仓数
+# 0.05 <= IC < 0.10: 偏低置信度，持仓数减半
+# IC < 0.05: 防御置信度，持仓数降至1/4（最低10只），不再清仓
+val_ic_trade_threshold: 0.10           # 【v6优化】原val_ic_trade_threshold不变
+val_ic_reduce_threshold: 0.05         # 【v6优化】原val_ic_reduce_threshold不变
+val_ic_defend_threshold: 0.05          # 【v6新增】防御持仓阈值，低于此减至1/4
+
+# ============================================================
+# 【v6优化】因子筛选配置参数
+# ============================================================
+# 缺失率阈值：超过该值则剔除
+feat_sel_nan_threshold: 0.5
+# 相关系数阈值：超过该值则去重
+feat_sel_max_corr: 0.95
+# PSI阈值：PSI > 此值则移除（仅对rank因子生效）
+feat_sel_psi_threshold: 0.25
+# RankIC阈值：|IC| < 此值则移除
+feat_sel_min_ic: 0.03                  # 【v6优化】0.01 → 0.03，减少噪音因子
+# MDI模型树数量（无早停）
+feat_sel_mdi_n_estimators: 500
+# MDA置换次数
+feat_sel_mda_n_repeats: 10
+
+# ============================================================
+# 【v6新增】预测值加权参数
+# ============================================================
+# softmax加权温度，控制权重集中度
+# temperature越小，权重越集中于高预测值股票
+pred_weight_temperature: 0.1           # 【v6新增】预测值加权温度
+
+# ============================================================
+# XGBoost 参数
+# ============================================================
+xgb_max_depth: 3
+xgb_learning_rate: 0.05
+xgb_n_estimators: 500
+xgb_subsample: 0.8
+xgb_colsample_bytree: 0.6
+xgb_min_child_weight: 50
+xgb_reg_alpha: 0.1
+xgb_reg_lambda: 1.0
+xgb_random_state: 42
+xgb_early_stopping_rounds: 20          # 【v6优化】30 → 20，减少过拟合训练
+
+top_quantile: 0.02                     # 【v5优化】0.10 → 0.02，只选前2%
+
+AUTO_STAGE_CONFIG:
+  1:
+    n_trials: 20
+    n_jobs: 1
+  2:
+    n_trials: 20
+    n_jobs: 1

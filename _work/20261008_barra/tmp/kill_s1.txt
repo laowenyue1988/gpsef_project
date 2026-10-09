@@ -1,0 +1,5 @@
+﻿KILLED pid=7192 name=python
+KILLED pid=25144 name=python
+SKIP pid=16448 : 找不到进程标识符为 16448 的进程。
+--- 残留 S1 相关进程 = 1
+--- B1 仍在跑进程 = 3

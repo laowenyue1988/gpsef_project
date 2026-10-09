@@ -1,0 +1,738 @@
+# -*- coding: utf-8 -*-
+
+"""
+本地数据提供者模块，提供从本地缓存读取和动态前复权计算功能。
+
+【性能优化版本】
+1. get_daily_data: 两级缓存 - 第一级以(code, reference_date)缓存完整已复权数据，第二级缓存切片结果
+2. get_minute_data: 添加缓存 + 早期退出机制
+3. 空结果缓存：对不存在的文件或超范围请求，缓存空结果避免重复IO
+4. 复权因子文件缓存：避免重复读取back_adjust parquet
+"""
+
+import os
+import glob
+import logging
+from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime, timedelta
+import pandas as pd
+import numpy as np
+
+logger = logging.getLogger(__name__)
+
+
+# ═══════ [R-147] 经济不变量核验（vwap 必须落在当日 [low, high] 内）═══════
+#   动机：2026-09-22 发现 `amount` 复权方向与价格相反（D-281）⇒ vwap 被 ×1/f，
+#         与复权后 OHLC 相对量纲差 f² ⇒ 实测全库 16~252/266 行越界，而管线**无任何断言**发现它。
+#   本核验在**每次数据加载**时执行（即每次重算都会跑），累计计数；
+#   默认非致命（WARN + 计数），设 `GPSEF_STRICT_INVARIANT=1` 切为**致命**（抛异常）。
+#   用法：重算结束后检查 `VWAP_INVARIANT_STATS['violations'] == 0`。
+VWAP_INVARIANT_STATS = {'checks': 0, 'violations': 0, 'events': 0, 'first': None}
+_VWAP_RTOL = 1e-3          # 相对容差（0.1%）：D-281 量级偏差 ≥0.2% ⇒ 2× 余量；数据舍入 ~1e-6 ⇒ 100× 余量
+_VWAP_LOG_FIRST = 20       # 前 N 次违规逐条 WARN，其后仅计数（防日志膨胀）
+
+
+def _check_vwap_invariant(df, code):
+    """[R-147 ①] `vwap = amount/volume` 与 OHLC 同量纲 ⇒ 必须落在 [low, high] 内。"""
+    try:
+        if 'vwap' not in df.columns or 'low' not in df.columns or 'high' not in df.columns:
+            return
+        v = pd.to_numeric(df['vwap'], errors='coerce').to_numpy(dtype=float)
+        lo = pd.to_numeric(df['low'], errors='coerce').to_numpy(dtype=float)
+        hi = pd.to_numeric(df['high'], errors='coerce').to_numpy(dtype=float)
+        m = np.isfinite(v) & np.isfinite(lo) & np.isfinite(hi) & (v > 0)
+        if not m.any():
+            return
+        # 相对容差判据（绝对容差会被 `low==high` 一字板日的舍入伪影误报）
+        bad = (v[m] < lo[m] * (1.0 - _VWAP_RTOL)) | (v[m] > hi[m] * (1.0 + _VWAP_RTOL))
+        VWAP_INVARIANT_STATS['checks'] += int(m.sum())
+        if bad.any():
+            nb = int(bad.sum())
+            VWAP_INVARIANT_STATS['violations'] += nb
+            VWAP_INVARIANT_STATS['events'] += 1
+            if VWAP_INVARIANT_STATS['first'] is None:
+                VWAP_INVARIANT_STATS['first'] = (code, nb)
+            if os.environ.get('GPSEF_STRICT_INVARIANT') == '1':
+                raise ValueError('[R-147] vwap ∉ [low*0.999, high*1.001]: code=%s 违规 %d/%d'
+                                 % (code, nb, int(m.sum())))
+            if VWAP_INVARIANT_STATS['events'] <= _VWAP_LOG_FIRST:
+                logger.warning('[R-147] vwap 越界(相对>%.1f%%): code=%s 违规 %d/%d（累计 %d）',
+                               _VWAP_RTOL * 100, code, nb, int(m.sum()),
+                               VWAP_INVARIANT_STATS['violations'])
+    except ValueError:
+        raise
+    except Exception as _e:  # 核验本身不得影响主流程
+        logger.debug('[R-147] 不变量核验跳过: %s', _e)
+
+
+def _normalize_dt(s: pd.Series) -> pd.Series:
+    """[FIX-DTYPE] 将datetime Series统一为datetime64[ns]无时区、归零到午夜。
+
+    解决parquet读取后datetime精度不一致(ms vs ns)或时区不一致导致的
+    merge_asof MergeError。对tz-naive数据安全，对tz-aware数据会去除时区。
+    """
+    s = pd.to_datetime(s)
+    if s.dt.tz is not None:
+        s = s.dt.tz_localize(None)
+    return s.dt.normalize().astype('datetime64[ns]')
+
+
+# 有效股票前缀
+VALID_STOCK_PREFIXES = ('sh.6', 'sz.0', 'sz.3')
+
+# 空结果标记（用于区分"缓存为空"和"未查询过"）
+_EMPTY_MARKER = object()
+
+
+class BaseDataProvider:
+    """数据提供者基类，定义统一接口。"""
+
+    def get_daily_data(
+            self, code: str, start_date: datetime, end_date: datetime, reference_date: Optional[datetime] = None
+    ) -> pd.DataFrame:
+        """获取日线数据"""
+        raise NotImplementedError
+
+    def get_trade_calendar(self, start_date: datetime, end_date: datetime) -> List[datetime]:
+        """获取交易日列表"""
+        raise NotImplementedError
+
+    def get_stock_list(self) -> List[str]:
+        """获取股票列表"""
+        raise NotImplementedError
+
+
+class LocalDataProvider(BaseDataProvider):
+    """
+    本地数据提供者，支持动态前复权计算。
+
+    【性能优化】
+    1. 两级缓存机制：
+       - _full_daily_cache: 以 (code, reference_date) 为key，缓存完整已复权数据
+       - _slice_cache: 以 (code, start_date, end_date, reference_date) 为key，缓存切片结果
+    2. 分钟线缓存：以 (code, freq, reference_date) 为key，缓存完整已复权分钟数据
+    3. 空结果缓存：对不存在的文件或超范围请求，缓存空结果标记避免重复IO
+    4. 复权因子文件缓存：避免重复读取back_adjust parquet
+    """
+
+    def __init__(self, base_path: str):
+        self.base_path = base_path
+        self.raw_daily_path = os.path.join(base_path, 'raw_daily')
+        self.back_adjust_path = os.path.join(base_path, 'back_adjust_factors')
+        self.snapshot_path = os.path.join(base_path, 'factor_snapshots')
+        self.trade_calendar_path = os.path.join(base_path, 'trade_datas.csv')
+        self.raw_minute_base_path = os.path.join(base_path, 'raw_minute')  # 新增：分钟线根目录
+        self.dividend_data_path = os.path.join(base_path, 'dividend_data')
+        os.makedirs(self.dividend_data_path, exist_ok=True)
+        self._dividend_cache: Dict[str, pd.DataFrame] = {}
+        self._dividend_cache_max_size = 500
+
+        # ===== 优化1: 两级日线缓存 =====
+        # 第一级：key = (code, reference_date), value = 完整已复权DataFrame 或 _EMPTY_MARKER
+        self._full_daily_cache: Dict[Tuple[str, datetime], Any] = {}
+        self._full_daily_cache_max_size = 150
+
+        # 第二级：key = string, value = 切片DataFrame 或 _EMPTY_MARKER
+        self._slice_cache: Dict[str, Any] = {}
+        self._slice_cache_max_size = 500
+
+        # ===== 优化2: 分钟线缓存 =====
+        # key = (code, freq, reference_date), value = 完整已复权分钟DataFrame 或 _EMPTY_MARKER
+        self._minute_cache: Dict[Tuple[str, str, datetime], Any] = {}
+        self._minute_cache_max_size = 200
+
+        # ===== 优化3: 复权因子缓存 =====
+        # key = code, value = DataFrame
+        self._back_factor_cache: Dict[str, pd.DataFrame] = {}
+        self._back_factor_cache_max_size = 500
+
+        # ===== 优化4: 日期范围缓存 =====
+        # key = code, value = (min_date, max_date) 元组，用于快速早期退出
+        self._daily_date_range_cache: Dict[str, Tuple[datetime, datetime]] = {}
+        self._minute_date_range_cache: Dict[str, Tuple[datetime, datetime]] = {}
+
+        self._stock_list_cache = None
+        self._calendar_cache = None
+        self.industry_map = {}
+        self._load_industry_mapping()
+        os.makedirs(self.raw_daily_path, exist_ok=True)
+        os.makedirs(self.back_adjust_path, exist_ok=True)
+        os.makedirs(self.snapshot_path, exist_ok=True)
+
+    def _get_cache_key(self, code: str, start: datetime, end: datetime, reference_date: datetime) -> str:
+        """生成切片缓存键"""
+        ref_str = reference_date.strftime('%Y%m%d')
+        return f"{code}_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}_{ref_str}"
+
+    def _get_raw_file_path(self, code: str) -> str:
+        """获取原始日线文件路径"""
+        safe = code.replace('.', '_')
+        return os.path.join(self.raw_daily_path, f"{safe}.parquet")
+
+    def _get_back_file_path(self, code: str) -> str:
+        """获取后复权因子文件路径"""
+        safe = code.replace('.', '_')
+        return os.path.join(self.back_adjust_path, f"{safe}_back_adjust.parquet")
+
+    def _get_back_factors(self, code: str) -> Optional[pd.DataFrame]:
+        """获取后复权因子数据（带缓存）"""
+        if code in self._back_factor_cache:
+            return self._back_factor_cache[code]
+        if code == 'sh.000300':
+            return None
+        back_file = self._get_back_file_path(code)
+        if not os.path.exists(back_file):
+            return None
+        try:
+            df_back = pd.read_parquet(back_file)
+            df_back['dividOperateDate'] = _normalize_dt(df_back['dividOperateDate'])
+            df_back = df_back.sort_values('dividOperateDate')
+            # 管理缓存大小
+            if len(self._back_factor_cache) >= self._back_factor_cache_max_size:
+                oldest = next(iter(self._back_factor_cache))
+                self._back_factor_cache.pop(oldest, None)   # D-331: 8 线程并发下 del 会抛 KeyError ⇒ 静默降级；改用 pop(k,None)
+            self._back_factor_cache[code] = df_back
+            return df_back
+        except Exception as e:
+            logger.error(f"读取复权因子失败 {back_file}: {e}")
+            return None
+
+    def _load_full_daily_data(self, code: str, reference_date: datetime) -> Optional[pd.DataFrame]:
+        """
+        加载并缓存完整已复权日线数据。
+
+        以 (code, reference_date) 为key缓存完整数据。
+        返回 None 表示文件不存在或数据为空（已缓存为_EMPTY_MARKER）。
+        """
+        full_key = (code, reference_date)
+
+        # 检查完整数据缓存
+        if full_key in self._full_daily_cache:
+            cached = self._full_daily_cache[full_key]
+            if cached is _EMPTY_MARKER:
+                return None
+            return cached.copy()
+
+        raw_file = self._get_raw_file_path(code)
+        if not os.path.exists(raw_file):
+            logger.warning(f"原始数据文件不存在: {raw_file}")
+            self._full_daily_cache[full_key] = _EMPTY_MARKER
+            return None
+
+        try:
+            df_raw = pd.read_parquet(raw_file)
+        except Exception as e:
+            logger.error(f"读取原始数据失败 {raw_file}: {e}")
+            self._full_daily_cache[full_key] = _EMPTY_MARKER
+            return None
+
+        if df_raw.empty:
+            logger.debug(f"原始数据为空: {code}")
+            self._full_daily_cache[full_key] = _EMPTY_MARKER
+            return None
+
+        df_raw['trade_date'] = _normalize_dt(df_raw['trade_date'])
+        df_raw = df_raw.sort_values('trade_date').reset_index(drop=True)
+
+        # 缓存日期范围用于早期退出
+        self._daily_date_range_cache[code] = (df_raw['trade_date'].min(), df_raw['trade_date'].max())
+
+        # 合并复权因子（使用缓存的复权因子数据）
+        df_back = self._get_back_factors(code)
+        if df_back is not None:
+            df_merged = pd.merge_asof(
+                df_raw,
+                df_back[['dividOperateDate', 'backAdjustFactor']],
+                left_on='trade_date',
+                right_on='dividOperateDate',
+                direction='backward'
+            )
+            df_merged['backAdjustFactor'] = df_merged['backAdjustFactor'].fillna(1.0)
+        else:
+            df_merged = df_raw.copy()
+            df_merged['backAdjustFactor'] = 1.0
+            if code != 'sh.000300':
+                logger.debug(f"{code} 无复权因子文件，使用默认因子 1.0")
+
+        # ═══════ [M0-v12] Step 1: 保存原始价格 (在任何bf操作之前) ═══════
+        # raw_open: broker执行价格 (M3.3)
+        # raw_close: portfolio估值 (M4.1)、_process_ex_dividend除权补偿 (M4.2)
+        if 'close' in df_merged.columns:
+            df_merged['raw_close'] = df_merged['close'].copy()
+        if 'open' in df_merged.columns:
+            df_merged['raw_open'] = df_merged['open'].copy()
+        if 'amount' in df_merged.columns:
+            df_merged['raw_amount'] = df_merged['amount'].copy()
+
+        # ═══════ [M0-v12] Step 2: bf单调平滑 ═══════
+        # 配股/增发导致bf递减时smooth_bf保持不降，确保:
+        # 1. 前复权价格连续 (adj_ret = raw_ret on bf递减日)
+        # 2. 方案C涨跌停判断正确 (change = 真实涨跌幅)
+        # 3. 策略因子/标签不受bf递减干扰
+        if 'backAdjustFactor' in df_merged.columns:
+            bf_vals = df_merged['backAdjustFactor'].values
+            smooth_bf = np.empty_like(bf_vals)
+            smooth_bf[0] = bf_vals[0]
+            for i in range(1, len(bf_vals)):
+                if bf_vals[i] > 0 and bf_vals[i-1] > 0:
+                    ratio = bf_vals[i] / bf_vals[i-1]
+                    if ratio >= 1.0:
+                        # bf递增(分红): smooth_bf按相同比例增长
+                        smooth_bf[i] = smooth_bf[i-1] * ratio
+                    else:
+                        # bf递减(配股/增发): smooth_bf保持不变
+                        smooth_bf[i] = smooth_bf[i-1]
+                else:
+                    smooth_bf[i] = smooth_bf[i-1]
+            df_merged['backAdjustFactor'] = smooth_bf
+
+        # ═══════ [M0-v12] Step 3: 获取基准日T的复权因子 (使用smooth_bf) ═══════
+        data_min = df_merged['trade_date'].min()
+        ref_mask = df_merged['trade_date'] <= reference_date
+        if ref_mask.any():
+            back_factor_T = df_merged.loc[ref_mask, 'backAdjustFactor'].iloc[-1]
+        else:
+            back_factor_T = df_merged['backAdjustFactor'].iloc[0]
+            logger.warning(f"{code} 基准日 {reference_date.date()} 早于数据起始日 "
+                           f"{data_min.date()}，使用起始日因子 {back_factor_T}")
+        if back_factor_T == 0:
+            back_factor_T = 1.0
+
+        # ═══════ [M0-v12] Step 4: 动态复权 (使用smooth_bf) ═══════
+        if 'backAdjustFactor' in df_merged.columns:
+            for col in ['open', 'high', 'low', 'close']:
+                if col in df_merged.columns:
+                    df_merged[col] = df_merged[col] * (df_merged['backAdjustFactor'] / back_factor_T)
+            if 'amount' in df_merged.columns:
+                # [FIX 2026-09-22 · D-281] 原实现为 `back_factor_T / backAdjustFactor`（= 1/f），
+                #   与价格的 `backAdjustFactor / back_factor_T`（= f）**方向相反** ⇒
+                #   `vwap = amount/volume` 被 ×1/f，与复权后 OHLC 相对量纲差 f²，
+                #   实测 `vwap ∉ [low, high]`（原始数据 0/266 越界 → 全库 16~252/266），
+                #   并使 39/190 个 alpha 列在含除权事件的窗口内带 0.9%~7.5% 伪跳变。
+                #   修法：改为与价格**同向** ×f；修复后 `vwap ∈ [low,high]` 恢复 0 越界。
+                df_merged['amount'] = df_merged['amount'] * (df_merged['backAdjustFactor'] / back_factor_T)
+            # 重新计算复权后的 vwap
+            if 'volume' in df_merged.columns and 'amount' in df_merged.columns:
+                df_merged['vwap'] = df_merged['amount'] / (df_merged['volume'] + 1e-10)
+            # [R-147] 每次加载即核验经济不变量（累计计数；strict 模式致命）
+            _check_vwap_invariant(df_merged, code)
+        if 'tradestatus' not in df_merged.columns:
+            df_merged['tradestatus'] = 1
+        if 'isST' not in df_merged.columns:
+            df_merged['isST'] = 0
+
+        # 管理缓存大小
+        if len(self._full_daily_cache) >= self._full_daily_cache_max_size:
+            oldest = next(iter(self._full_daily_cache))
+            self._full_daily_cache.pop(oldest, None)         # D-331: 同类并发竞态，统一改 pop(k,None)
+
+        self._full_daily_cache[full_key] = df_merged
+        return df_merged.copy()
+
+    def get_daily_data(
+            self,
+            code: str,
+            start_date: datetime,
+            end_date: datetime,
+            reference_date: Optional[datetime] = None
+    ) -> pd.DataFrame:
+        """
+        获取单只股票前复权日线数据。
+
+        【性能优化版本】
+        1. 两级缓存：第一级以(code, reference_date)缓存完整数据，第二级缓存切片结果
+        2. 早期退出：使用日期范围缓存快速判断请求是否超出数据范围
+
+        输入：
+            code: 股票代码，如 'sh.600000'
+            start_date: 起始日期（包含）
+            end_date: 结束日期（包含）
+            reference_date: 前复权基准日，若为 None 则使用 end_date
+        输出：
+            DataFrame，包含 open, high, low, close, volume, amount, tradestatus, isST
+        调用方：策略 before_market_open，回测引擎估值，模拟经纪商
+        """
+        if reference_date is None:
+            reference_date = end_date
+
+        # 【优化】早期退出：使用日期范围缓存快速判断
+        if code in self._daily_date_range_cache:
+            data_min, data_max = self._daily_date_range_cache[code]
+            if start_date > data_max or end_date < data_min:
+                return pd.DataFrame()
+
+        # 检查切片缓存
+        cache_key = self._get_cache_key(code, start_date, end_date, reference_date)
+        if cache_key in self._slice_cache:
+            cached = self._slice_cache[cache_key]
+            if cached is _EMPTY_MARKER:
+                return pd.DataFrame()
+            return cached.copy()
+
+        # 获取完整已复权数据（带缓存）
+        df_merged = self._load_full_daily_data(code, reference_date)
+
+        if df_merged is None or df_merged.empty:
+            self._slice_cache[cache_key] = _EMPTY_MARKER
+            return pd.DataFrame()
+
+        # 检查请求日期范围是否在数据覆盖范围内
+        data_min = df_merged['trade_date'].min()
+        data_max = df_merged['trade_date'].max()
+        if start_date > data_max or end_date < data_min:
+            self._slice_cache[cache_key] = _EMPTY_MARKER
+            return pd.DataFrame()
+
+        # 切片
+        mask = (df_merged['trade_date'] >= start_date) & (df_merged['trade_date'] <= end_date)
+        result = df_merged[mask].copy()
+        if result.empty:
+            logger.debug(
+                f"{code} 切片后无数据: [{start_date.date()}, {end_date.date()}]，"
+                f"原始数据 {len(df_merged)} 条"
+            )
+
+        # 缓存切片结果
+        if len(self._slice_cache) >= self._slice_cache_max_size:
+            oldest = next(iter(self._slice_cache))
+            self._slice_cache.pop(oldest, None)              # D-331: 同类并发竞态，统一改 pop(k,None)
+        self._slice_cache[cache_key] = result
+        return result
+
+    def _load_full_minute_data(self, code: str, freq: str, reference_date: datetime) -> Optional[pd.DataFrame]:
+        """
+        加载并缓存完整已复权分钟数据。
+
+        以 (code, freq, reference_date) 为key缓存完整数据。
+        """
+        minute_key = (code, freq, reference_date)
+
+        # 检查缓存
+        if minute_key in self._minute_cache:
+            cached = self._minute_cache[minute_key]
+            if cached is _EMPTY_MARKER:
+                return None
+            return cached.copy()
+
+        # 将 freq='5' 映射为目录名 '5min'
+        freq_dir = '5min' if freq == '5' else freq
+        safe = code.replace('.', '_')
+        minute_path = os.path.join(self.raw_minute_base_path, freq_dir, f'{safe}.parquet')
+
+        if not os.path.exists(minute_path):
+            logger.warning(f"分钟线文件不存在: {minute_path}")
+            self._minute_cache[minute_key] = _EMPTY_MARKER
+            return None
+
+        try:
+            df_raw = pd.read_parquet(minute_path)
+        except Exception as e:
+            logger.error(f"读取分钟线失败 {minute_path}: {e}")
+            self._minute_cache[minute_key] = _EMPTY_MARKER
+            return None
+
+        if df_raw.empty:
+            self._minute_cache[minute_key] = _EMPTY_MARKER
+            return None
+
+        df_raw['trade_time'] = pd.to_datetime(df_raw['trade_time'])
+        df_raw['trade_date'] = _normalize_dt(df_raw['trade_date'])
+        df_raw = df_raw.sort_values('trade_time').reset_index(drop=True)
+
+        # 缓存日期范围用于早期退出
+        self._minute_date_range_cache[code] = (df_raw['trade_date'].min(), df_raw['trade_date'].max())
+
+        # 合并复权因子（使用缓存的复权因子数据）
+        df_back = self._get_back_factors(code)
+        if df_back is not None:
+            df_merged = pd.merge_asof(
+                df_raw,
+                df_back[['dividOperateDate', 'backAdjustFactor']],
+                left_on='trade_date',
+                right_on='dividOperateDate',
+                direction='backward'
+            )
+            df_merged['backAdjustFactor'] = df_merged['backAdjustFactor'].fillna(1.0)
+        else:
+            df_merged = df_raw.copy()
+            df_merged['backAdjustFactor'] = 1.0
+
+        # ═══════ [v12-fix] 分钟线bf单调平滑 ═══════
+        # 与日线_load_full_daily_data保持一致:
+        # 配股/增发导致bf递减时smooth_bf保持不降，确保分钟线前复权价格连续
+        if 'backAdjustFactor' in df_merged.columns:
+            bf_vals = df_merged['backAdjustFactor'].values
+            smooth_bf = np.empty_like(bf_vals)
+            smooth_bf[0] = bf_vals[0]
+            for i in range(1, len(bf_vals)):
+                if bf_vals[i] > 0 and bf_vals[i-1] > 0:
+                    ratio = bf_vals[i] / bf_vals[i-1]
+                    if ratio >= 1.0:
+                        # bf递增(分红): smooth_bf按相同比例增长
+                        smooth_bf[i] = smooth_bf[i-1] * ratio
+                    else:
+                        # bf递减(配股/增发): smooth_bf保持不变
+                        smooth_bf[i] = smooth_bf[i-1]
+                else:
+                    smooth_bf[i] = smooth_bf[i-1]
+            df_merged['backAdjustFactor'] = smooth_bf
+
+        # 获取基准日 T 的后复权因子
+        ref_mask = df_merged['trade_date'] <= reference_date
+        if ref_mask.any():
+            back_factor_T = df_merged.loc[ref_mask, 'backAdjustFactor'].iloc[-1]
+        else:
+            # 使用数据起始日的因子，而非固定1.0
+            data_min = df_merged['trade_date'].min()
+            back_factor_T = df_merged['backAdjustFactor'].iloc[0]
+            logger.warning(f"{code} 分钟线基准日 {reference_date.date()} 早于数据起始日 "
+                           f"{data_min.date()}，使用起始日因子 {back_factor_T}")
+        if back_factor_T == 0:
+            back_factor_T = 1.0
+
+        # 动态前复权
+        for col in ['open', 'high', 'low', 'close']:
+            if col in df_merged.columns:
+                df_merged[col] = df_merged[col] * (df_merged['backAdjustFactor'] / back_factor_T)
+        # [FIX 2026-09-22 · D-281] 分钟链路此前**只调 OHLC、不动 amount** ⇒ 与日线（已修为 ×f）不一致。
+        #   实测分钟 amount 的 3 个消费点（labels.py:832 / strategy.py:4090 / :5096）**只用 high/low/close**
+        #   ⇒ 本修正**零行为影响**；加上它是为了消除「同量纲派生量方向不一致」的隐患（R-147③）。
+        if 'amount' in df_merged.columns:
+            df_merged['amount'] = df_merged['amount'] * (df_merged['backAdjustFactor'] / back_factor_T)
+
+        # 管理缓存大小
+        if len(self._minute_cache) >= self._minute_cache_max_size:
+            oldest = next(iter(self._minute_cache))
+            self._minute_cache.pop(oldest, None)             # D-331: 同类并发竞态，统一改 pop(k,None)
+
+        self._minute_cache[minute_key] = df_merged
+        return df_merged.copy()
+
+    def get_minute_data(
+            self,
+            code: str,
+            start_time: datetime,
+            end_time: datetime,
+            freq: str = '5',
+            reference_date: Optional[datetime] = None
+    ) -> pd.DataFrame:
+        """
+        获取单只股票前复权分钟K线数据。
+
+        【性能优化版本】
+        1. 添加缓存机制（以code+freq+reference_date为key缓存完整数据）
+        2. 早期退出：如果请求范围完全超出数据覆盖范围，立即返回空DataFrame
+        3. 空结果缓存：对不存在的文件，缓存空标记避免重复IO
+        """
+        if reference_date is None:
+            reference_date = datetime(end_time.year, end_time.month, end_time.day)
+
+        # 【优化】早期退出：使用日期范围缓存快速判断
+        if code in self._minute_date_range_cache:
+            data_min, data_max = self._minute_date_range_cache[code]
+            start_date = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = end_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            if start_date > data_max or end_date < data_min:
+                return pd.DataFrame()
+
+        # 获取完整已复权分钟数据（带缓存）
+        df_merged = self._load_full_minute_data(code, freq, reference_date)
+
+        if df_merged is None or df_merged.empty:
+            return pd.DataFrame()
+
+        # 【优化: 早期退出】检查日期覆盖范围
+        data_min = df_merged['trade_date'].min()
+        data_max = df_merged['trade_date'].max()
+        start_date = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = end_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        if start_date > data_max or end_date < data_min:
+            logger.debug(
+                f"{code} 分钟线请求范围 [{start_date.date()}, {end_date.date()}] "
+                f"超出数据范围 [{data_min.date()}, {data_max.date()}]"
+            )
+            return pd.DataFrame()
+
+        # 切片并返回
+        mask = (df_merged['trade_time'] >= start_time) & (df_merged['trade_time'] <= end_time)
+        result = df_merged[mask][
+            ['trade_time', 'trade_date', 'open', 'high', 'low', 'close', 'volume', 'amount']].copy()
+        if result.empty:
+            logger.debug(f"{code} 分钟线切片后无数据: [{start_time}, {end_time}]")
+        return result
+
+    def warmup_daily_cache(self, codes: List[str], reference_date: datetime):
+        """批量预热日线缓存"""
+        logger.info(f"预热日线缓存: {len(codes)} 只股票, reference_date={reference_date.date()}")
+        for code in codes:
+            self._load_full_daily_data(code, reference_date)
+        logger.info(f"缓存预热完成: {len(self._full_daily_cache)} 条完整数据")
+
+    def get_trade_calendar(self, start_date: datetime, end_date: datetime) -> List[datetime]:
+        """
+        获取指定区间内的交易日列表。
+        输入：
+            start_date: 起始日期
+            end_date: 结束日期
+        输出：
+            交易日 datetime 列表（升序）
+        调用方：回测引擎，策略获取历史交易日等
+        """
+        if self._calendar_cache is None:
+            if os.path.exists(self.trade_calendar_path):
+                df = pd.read_csv(self.trade_calendar_path)
+                df['calendar_date'] = pd.to_datetime(df['calendar_date'])
+                self._calendar_cache = df[df['is_trading_day'] == 1]['calendar_date'].tolist()
+            else:
+                all_dates = set()
+                # [FIX-DET-2026-09-10] 原实现 `glob.glob(...)[:50]` 存在两处不可复现风险:
+                #   ① 未排序 → 取到"哪 50 个文件"取决于文件系统返回顺序;
+                #   ② 截断到 50 个 → 若其中含上市较晚/停牌较多的标的, 交易日集合会缺日,
+                #      而交易日历决定调仓日 → 直接改变全部回测结果。
+                # 修复: 排序 + 全量扫描 (该分支仅在 trade_datas.csv 缺失时触发, 代价可接受)。
+                for f in sorted(glob.glob(os.path.join(self.raw_daily_path, '*.parquet'))):
+                    df = pd.read_parquet(f, columns=['trade_date'])
+                    all_dates.update(pd.to_datetime(df['trade_date']).tolist())
+                self._calendar_cache = sorted(all_dates)
+        return [d for d in self._calendar_cache if start_date <= d <= end_date]
+
+    def get_stock_list(self) -> List[str]:
+        """
+        获取全市场股票代码列表。
+        输入：无
+        输出：
+            股票代码列表
+        调用方：股票池初始化，策略获取候选范围
+        """
+        if self._stock_list_cache is None:
+            codes = []
+            for f in glob.glob(os.path.join(self.raw_daily_path, '*.parquet')):
+                basename = os.path.basename(f).replace('.parquet', '')
+                code = basename.replace('_', '.')
+                if code.startswith(VALID_STOCK_PREFIXES):
+                    codes.append(code)
+            self._stock_list_cache = sorted(codes)
+        return self._stock_list_cache
+
+    def get_factor_snapshot(self, date: datetime) -> Optional[pd.DataFrame]:
+        """
+        获取指定日期的因子快照。
+        输入：
+            date: 快照日期
+        输出：
+            DataFrame 或 None
+        调用方：Alpha191 等机器学习策略
+        """
+        date_str = date.strftime('%Y%m%d')
+        file_path = os.path.join(self.snapshot_path, f'factors_{date_str}.parquet')
+        if not os.path.exists(file_path):
+            return None
+        df = pd.read_parquet(file_path)
+        df['trade_date'] = pd.to_datetime(df['trade_date'])
+        return df
+
+    def save_factor_snapshot(self, df: pd.DataFrame, date: datetime):
+        """
+        保存因子快照到本地。
+        输入：
+            df: 因子 DataFrame
+            date: 快照日期
+        输出：无
+        调用方：snapshots.py 生成因子快照
+        """
+        date_str = date.strftime('%Y%m%d')
+        file_path = os.path.join(self.snapshot_path, f'factors_{date_str}.parquet')
+        # [FIX-I-20260915] 原子写：先写 .tmp 再 os.replace。
+        #   原实现直写终路径：中断（崩溃/断电）会留下半截 parquet，而下游
+        #   `get_factor_snapshot` 仅以 os.path.exists 判定存在 ⇒ 半截文件会被当作
+        #   有效快照读取（静默坏数据）。project 内 strategy.py 的缓存写盘已用此范式。
+        tmp_path = file_path + '.tmp'
+        df.to_parquet(tmp_path, index=False, compression='snappy')
+        os.replace(tmp_path, file_path)
+
+    # 新增方法（放在类内部）：
+    def _load_industry_mapping(self):
+        import os
+        import pandas as pd
+        csv_path = os.path.join(self.base_path, 'stock_industry.csv')
+        if not os.path.exists(csv_path):
+            logger.warning(f"Industry file not found: {csv_path}")
+            return
+        df = pd.read_csv(csv_path, encoding='utf-8')
+        # 填充缺失行业
+        df['industry'] = df['industry'].fillna('OTHER').astype(str)
+        self.industry_map = dict(zip(df['code'], df['industry']))
+
+    def get_industry(self, code: str) -> str:
+        """返回行业标签，若无则返回 'OTHER'"""
+        return self.industry_map.get(code, 'OTHER')
+
+    def get_all_industries(self) -> list:
+        """返回所有行业代码列表"""
+        return list(set(self.industry_map.values()))
+
+    # ==================== 分红数据查询 ====================
+
+    def _get_dividend_file_path(self, code: str) -> str:
+        """获取分红数据文件路径"""
+        safe = code.replace('.', '_')
+        return os.path.join(self.dividend_data_path, f"{safe}_dividend.parquet")
+
+    def get_dividend_event(self, code: str, date: datetime) -> Optional[dict]:
+        """
+        查询某只股票在指定日期是否有除权事件。
+
+        返回: dict 或 None
+          {
+            'cash_ps': float,       # 每股税前现金分红（元/股）
+            'bonus_ps': float,      # 每股送股比例（股/股）
+            'reserve_ps': float,    # 每股转增比例（股/股）
+            'stock_ratio': float,   # 送转总比例 = bonus_ps + reserve_ps
+            'description': str,     # 分红送转描述原文
+          }
+        """
+        if code in self._dividend_cache:
+            df = self._dividend_cache[code]
+        else:
+            div_file = self._get_dividend_file_path(code)
+            if not os.path.exists(div_file):
+                return None
+            try:
+                df = pd.read_parquet(div_file)
+                if 'dividOperateDate' in df.columns:
+                    df['dividOperateDate'] = _normalize_dt(df['dividOperateDate'])
+                # 缓存管理
+                if len(self._dividend_cache) >= self._dividend_cache_max_size:
+                    oldest = next(iter(self._dividend_cache))
+                    self._dividend_cache.pop(oldest, None)   # D-331: 同类并发竞态，统一改 pop(k,None)
+                self._dividend_cache[code] = df
+            except Exception as e:
+                logger.error(f"读取分红数据失败 {div_file}: {e}")
+                return None
+
+        if df is None or df.empty:
+            return None
+
+        ts_date = pd.Timestamp(date).normalize()
+        if 'dividOperateDate' not in df.columns:
+            return None
+        mask = df['dividOperateDate'] == ts_date
+        if not mask.any():
+            return None
+
+        row = df.loc[mask[mask].index[0]]
+        cash_ps = float(row.get('dividCashPsBeforeTax', 0) or 0)
+        bonus_ps = float(row.get('dividStocksPs', 0) or 0)
+        reserve_ps = float(row.get('dividReserveToStockPs', 0) or 0)
+        stock_ratio = bonus_ps + reserve_ps
+
+        if cash_ps == 0 and stock_ratio == 0:
+            return None
+
+        return {
+            'cash_ps': cash_ps,
+            'bonus_ps': bonus_ps,
+            'reserve_ps': reserve_ps,
+            'stock_ratio': stock_ratio,
+            'description': str(row.get('dividCashStock', '')),
+        }

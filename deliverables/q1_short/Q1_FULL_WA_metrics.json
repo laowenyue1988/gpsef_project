@@ -1,0 +1,156 @@
+{
+ "arm": {
+  "label": "Q1-FULL-WA",
+  "run_dir": "results/SmallAlpha191Test3_Q1_full_WA_o3_20260913",
+  "window": "WA",
+  "period": "2021-04-01 to 2021-10-01",
+  "sharpe": 3.089521238471058,
+  "calmar_full": 7.913495244307658,
+  "calmar_rounded": 7.910852713178294,
+  "annual_return": 0.40816545396437065,
+  "total_return": 0.18344220030503577,
+  "max_drawdown": -0.05157840389908272,
+  "mdd_date": "2021-09-29",
+  "annual_volatility": 0.13211284935732098,
+  "nav_full": 0.18559982505525952,
+  "nav_mdd": -0.05157840389908264,
+  "total_orders": 220,
+  "n_days": 124,
+  "avg_exposure": 0.3716378310447904,
+  "exposure_mean_of_ratio": 0.37359377357657053,
+  "unit_exposure_return": 1.0982882254395083,
+  "unit_exposure_mdd": 0.13878674233481467,
+  "valley": [
+   {
+    "valley_date": "2021-09-29",
+    "in_window": true,
+    "pos_value": 828723.0,
+    "total_value_eod": 1166962.0550026996,
+    "clear_ratio": 0.710154196057457,
+    "cash_ratio": 0.289845803942543,
+    "dd_at_valley": -0.05157840389908264,
+    "rebound_day": null,
+    "rebound_pct": null
+   }
+  ],
+  "min_exposure_day": {
+   "date": "2021-06-02",
+   "clear_ratio": 0.0,
+   "pos_value": 0.0,
+   "total_value_eod": 1070728.4740574278
+  },
+  "triggers": {
+   "sell_total": 166,
+   "buy_new_open": 54,
+   "pt_total": 78,
+   "sl_total": 47,
+   "pt_ratio": 0.46987951807228917,
+   "sl_ratio": 0.28313253012048195,
+   "by_reason_sell": {
+    "default": 41,
+    "stage1_pt": 26,
+    "stage1_sl": 9,
+    "stage2_pt": 26,
+    "stage2_sl": 9,
+    "stage3_pt": 17,
+    "stage3_sl": 11,
+    "stage4_pt": 9,
+    "stage4_sl": 18
+   },
+   "by_reason_buy": {
+    "new_open": 54
+   }
+  },
+  "holding": {
+   "episodes": 54,
+   "avg_holding_days": 23.64814814814815,
+   "max_holding_days": 33,
+   "caliber": "单期持有期 = max(holding_days)+1（含建仓日）；按 holding_days==0 断新期"
+  },
+  "valley_kind": "策略自身 MaxDD 日",
+  "cross_impl_exposure_delta": 5.551115123125783e-16
+ },
+ "base": {
+  "label": "Q1-FULL-WA-BASE",
+  "run_dir": "results/SmallAlpha191Test3_Q1_base_WA_o3_20260913",
+  "window": "WA",
+  "period": "2021-04-01 to 2021-10-01",
+  "sharpe": 2.3983405101077584,
+  "calmar_full": 4.845712975263803,
+  "calmar_rounded": 4.844984802431611,
+  "annual_return": 0.3188188106221461,
+  "total_return": 0.1458788834718685,
+  "max_drawdown": -0.06579399404166927,
+  "mdd_date": "2021-09-29",
+  "annual_volatility": 0.13293308822433286,
+  "nav_full": 0.15119907944435496,
+  "nav_mdd": -0.06579399404166919,
+  "total_orders": 402,
+  "n_days": 124,
+  "avg_exposure": 0.40698660855229024,
+  "exposure_mean_of_ratio": 0.40842889594942483,
+  "unit_exposure_return": 0.7833643759342116,
+  "unit_exposure_mdd": 0.1616613241298232,
+  "valley": [
+   {
+    "valley_date": "2021-09-29",
+    "in_window": true,
+    "pos_value": 832044.3599999999,
+    "total_value_eod": 1119000.0720631108,
+    "clear_ratio": 0.743560595546658,
+    "cash_ratio": 0.256439404453342,
+    "dd_at_valley": -0.06579399404166919,
+    "rebound_day": null,
+    "rebound_pct": null
+   }
+  ],
+  "min_exposure_day": {
+   "date": "2021-06-02",
+   "clear_ratio": 0.0,
+   "pos_value": 0.0,
+   "total_value_eod": 1060929.8800215814
+  },
+  "triggers": {
+   "sell_total": 302,
+   "buy_new_open": 100,
+   "pt_total": 147,
+   "sl_total": 78,
+   "pt_ratio": 0.4867549668874172,
+   "sl_ratio": 0.2582781456953642,
+   "by_reason_sell": {
+    "default": 77,
+    "stage1_pt": 47,
+    "stage1_sl": 16,
+    "stage2_pt": 47,
+    "stage2_sl": 16,
+    "stage3_pt": 36,
+    "stage3_sl": 14,
+    "stage4_pt": 17,
+    "stage4_sl": 32
+   },
+   "by_reason_buy": {
+    "new_open": 100
+   }
+  },
+  "holding": {
+   "episodes": 100,
+   "avg_holding_days": 24.35,
+   "max_holding_days": 33,
+   "caliber": "单期持有期 = max(holding_days)+1（含建仓日）；按 holding_days==0 断新期"
+  },
+  "valley_kind": "策略自身 MaxDD 日",
+  "cross_impl_exposure_delta": 5.551115123125783e-17
+ },
+ "compare": {
+  "d_calmar_rel": 0.6330920309775143,
+  "d_calmar_abs": 3.067782269043855,
+  "d_sharpe": 0.6911807283632996,
+  "mdd_worsen_pp": -1.4215590142586554,
+  "g1_calmar_ge_10pct": true,
+  "g2_sharpe_positive": true,
+  "g3_mdd_worsen_le_1pp": true,
+  "conj_3_of_3": true,
+  "mdd_abs_arm": 0.05157840389908272,
+  "mdd_cap_note": "|MaxDD|<20% 仅 Q5 验收检查（禁作 Q1/Q2 搜索约束）"
+ }
+}

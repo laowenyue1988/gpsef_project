@@ -1,0 +1,8 @@
+﻿python=6  tee=3
+CPU total T0=s  T1=s  delta=0.0s per 20s wall
+  pid=9132 cpu=148.4s started=2026/10/8 16:12:56
+  pid=14512 cpu=154.3s started=2026/10/8 16:12:51
+  pid=17272 cpu=160.2s started=2026/10/8 16:12:45
+  pid=21844 cpu=0.2s started=2026/10/8 16:12:45
+  pid=24920 cpu=0.2s started=2026/10/8 16:12:56
+  pid=36980 cpu=0.2s started=2026/10/8 16:12:50
